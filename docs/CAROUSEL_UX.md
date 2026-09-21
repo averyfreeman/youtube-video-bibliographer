@@ -1,0 +1,5 @@
+# Mobile Carousel Index UX
+
+The implemented strategy is a modal popover index. The article and project carousels use native horizontal overflow and CSS scroll snapping, so touch dragging works without gesture JavaScript. Previous/next buttons and arrow keys call the same positioning function. The index opens in a daisyUI dialog, traps focus while open, closes with Escape or the backdrop, and jumps directly to an item. This is compact at 1024, 800, 640, 400, and 320 pixels and avoids reserving scarce horizontal space.
+
+A persistent sidebar index would expose every destination and make repeated switching one step faster, but at tablet widths it competes directly with card width and the profile column. Turning it into a drawer solves the width problem but adds another open/close state, duplicates much of the modal behavior, and can make nested horizontal/vertical touch gestures harder to predict. A popover is the smaller coherent design for this site; a sidebar becomes worthwhile only if collections grow large enough to require search, grouping, or persistent progress state.

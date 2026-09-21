@@ -1,0 +1,16 @@
+# The repository contains only the published article tree. Keep local
+# editorial and pipeline artifacts private and out of Git history.
+_article_pipeline/
+drafts/
+inbox/
+staging/
+backup/
+*.tmp
+.DS_Store
+
+# Raw Google Takeout archives are intentionally stored in raw-takeout/ and
+# tracked with Git LFS. Keep generated extraction and checksum workspaces out.
+raw-takeout/.DS_Store
+raw-takeout/extracted/
+raw-takeout/staging/
+raw-takeout/backup/

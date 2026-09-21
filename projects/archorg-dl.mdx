@@ -1,0 +1,78 @@
+---
+title: archorg-dl
+description: Download and re-create TV from the Internet Archive website.
+language: Shell
+stars: 1
+forks: 0
+updatedAt: 2026-04-10T11:05:56Z
+url: https://github.com/averyfreeman/archorg-dl
+topics:
+  - shell
+  - internet archive
+isFork: false
+size: 25
+order: 2
+readmeBaseUrl: https://raw.githubusercontent.com/averyfreeman/archorg-dl/main/
+---
+
+# archorg-dl
+
+> Download and reconstruct archive.org television broadcasts from segmented clips.
+
+![Linux](https://img.shields.io/badge/platform-linux-blue)
+![License](https://img.shields.io/badge/license-research--use-lightgrey)
+![Dependencies](https://img.shields.io/badge/dependencies-ffmpeg%20jq%20yt--dlp-green)
+
+`archorg-dl` automates downloading and reconstructing segmented video clips from archive.org television recordings into a single playable video file.
+
+Archive.org limits playback of many TV broadcasts to **1-minute segments**, requiring manual scrolling through dozens of clips to watch a full program.
+
+This tool downloads those clips and **reassembles them into a single video file**.
+
+---
+
+# Table of Contents
+
+* [Features](#features)
+* [How It Works](#how-it-works)
+* [Dependencies](#dependencies)
+* [Installation](#installation)
+* [Quick Start](#quick-start)
+* [Usage](#usage)
+* [Examples](#examples)
+* [Output Structure](#output-structure)
+* [Cleaning Temporary Files](#cleaning-temporary-files)
+* [Troubleshooting](#troubleshooting)
+* [Supported Systems](#supported-systems)
+* [Repository](#repository)
+* [Disclaimer](#disclaimer)
+
+---
+
+# Features
+
+* Download segmented video clips from archive.org TV pages
+* Automatically reconstruct clips into a single video
+* Organize downloads by broadcast network
+* Lightweight shell script
+* Uses standard Unix tools
+* Minimal dependencies
+
+# How It Works
+
+1. You provide an **archive.org program page URL**.
+2. The script extracts all **segment video URLs**.
+3. Each segment is downloaded.
+4. Segments are **assembled into a single MP4 video** using `ffmpeg`.
+
+# Dependencies
+
+Required command-line tools:
+
+```
+bat
+bc
+ffmpeg
+jq
+yt-dlp
+```

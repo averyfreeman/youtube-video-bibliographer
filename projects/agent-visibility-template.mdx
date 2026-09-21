@@ -1,0 +1,51 @@
+---
+title: Agent Visibility Template
+description: A TypeScript template for making agent execution and progress visible.
+language: TypeScript
+stars: 0
+forks: 0
+updatedAt: 2026-07-25T19:28:03Z
+url: https://github.com/averyfreeman/agent-visibility-template
+topics:
+  - agents
+  - observability
+  - typescript
+isFork: false
+size: 149
+order: 3
+readmeBaseUrl: https://raw.githubusercontent.com/averyfreeman/agent-visibility-template/main/
+---
+
+# AI Agent Visibility
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/agent-visibility-template)
+
+<!-- dash-content-start -->
+
+Search is shifting from links to answers. To show up in those answers, your content has to be readable by AI agents and crawlers — in whatever convention each one looks for. This template makes your site visible across **every** agent-discovery surface from a single content store, powered by [Workers AI](https://developers.cloudflare.com/workers-ai/).
+
+**How it works:** the Worker enriches your content once with Workers AI — deriving a clean title, an agent-friendly summary, key points, and topic tags — caches it in [KV](https://developers.cloudflare.com/kv/), then projects that one store onto every surface an agent might request:
+
+- **`/llms.txt`** and **`/llms-full.txt`** — the [llms.txt](https://llmstxt.org) index conventions
+- **`/index.json`** — a typed JSON index for structured agents
+- **`/<slug>.md`** — clean per-page Markdown, ideal for grounding and citation
+- **`/robots.txt`** — explicit directives that welcome named AI crawlers
+- **`Content-Signal` headers** — declare how agents may use your content
+- **JSON-LD** (`/jsonld`, `/<slug>.jsonld`) — schema.org structured data for classic and AI crawlers
+- **Web Bot Auth** _(optional)_ — verify the identity of signed agents (RFC 9421, Ed25519)
+
+The same data, in whichever shape an agent prefers. A bundled UI lets you preview and copy each surface live.
+
+This template ships with sample content so it works the moment you deploy it. Point it at your own pages by editing `src/lib/content.ts`, or POST content to `/api/resources` to enrich it on the fly.
+
+<!-- dash-content-end -->
+
+## Who is this for
+
+- **Anyone who wants to show up in AI answers.** This gives agents a clean, structured copy of your content to cite.
+- **Developers exploring AEO.** A working reference for emerging agent-discovery conventions.
+- **Teams who keep getting agent 4xxs.** Serve agents content they can read.
+
+> Looking for a commerce-specific version? See the [`commerce-llms-txt-template`](../commerce-llms-txt-template).
+
+A TypeScript starting point for agent-oriented interfaces where execution state, progress, and outcomes need to remain visible.

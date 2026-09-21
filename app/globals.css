@@ -1,0 +1,35 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: corporate --default;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: var(--color-base-100);
+}
+
+body {
+  min-width: 320px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.bibliographer-prose p + p {
+  margin-top: 0.85rem;
+}
+
+.timestamp-link {
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-output {
+  max-height: 34rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

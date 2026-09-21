@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Transcript Bibliographer Tool
+  description: Tool schema for ingesting video transcripts and returning verified historical references and primary source citations.
+  version: 1.0.0
+paths:
+  /extract-references:
+    post:
+      summary: Extract and verify historical quotes and references from transcript text
+      operationId: extractTranscriptReferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - transcript
+              properties:
+                transcript:
+                  type: string
+                  description: Full timestamped or raw transcript text from the media source.
+                media_url:
+                  type: string
+                  format: uri
+                  description: The original URL of the media (YouTube, podcast, archive).
+                strict_primary_only:
+                  type: boolean
+                  default: true
+                  description: Enforce primary-source-only grounding (archives, government records, first-hand publications).
+      responses:
+        '200':
+          description: Successful extraction of bibliographical references.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  references:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - title
+                        - type
+                        - source_url
+                        - source_name
+                        - spoken_quote
+                        - timestamp_raw
+                        - timestamp_formatted
+                        - bibliographical_note
+                      properties:
+                        title:
+                          type: string
+                          description: Name of the referenced document, event, or quote.
+                        type:
+                          type: string
+                          enum: [Historical Quote, Legislative/Regulatory, Economic Reference, Executive Statement]
+                        source_url:
+                          type: string
+                          format: uri
+                        source_name:
+                          type: string
+                        spoken_quote:
+                          type: string
+                        timestamp_raw:
+                          type: string
+                          example: "[00:02:44]"
+                        timestamp_formatted:
+                          type: string
+                          example: "2 min, 44 sec"
+                        bibliographical_note:
+                          type: string
+                          description: Contextual resolution of historical accuracy and corrected wording.

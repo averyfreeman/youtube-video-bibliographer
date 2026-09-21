@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hits"],
+  "properties": {
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "category",
+          "evidenceType",
+          "timestamp",
+          "timestampSeconds",
+          "historicalDate",
+          "videoEvidence",
+          "confidence",
+          "analysisParagraphs",
+          "sources"
+        ],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "category": {
+            "type": "string",
+            "enum": [
+              "quote",
+              "publication",
+              "event",
+              "financial_crisis",
+              "regulation",
+              "executive_statement",
+              "other"
+            ]
+          },
+          "evidenceType": {
+            "type": "string",
+            "enum": ["direct_quote", "paraphrase", "reference"]
+          },
+          "timestamp": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
+          },
+          "timestampSeconds": { "type": "integer", "minimum": 0 },
+          "historicalDate": { "type": ["string", "null"], "maxLength": 160 },
+          "videoEvidence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+          "analysisParagraphs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": { "type": "string", "minLength": 1, "maxLength": 4000 }
+          },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "url", "quality", "note"],
+              "properties": {
+                "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+                "url": { "type": "string", "format": "uri" },
+                "quality": {
+                  "type": "string",
+                  "enum": [
+                    "primary",
+                    "reputable",
+                    "secondary",
+                    "analysis",
+                    "culture"
+                  ]
+                },
+                "note": { "type": ["string", "null"], "maxLength": 500 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+
+[submodule "content/pipeline"]
+	path = content/pipeline
+	url = ../Airflow-AI_Search-to-Blog-Article-Pipeline.git
+
+[submodule "content/articles"]
+	path = content/articles
+	url = ../UnixGreybeard.Org-Articles.git
