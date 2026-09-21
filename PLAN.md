@@ -1,6 +1,6 @@
 # YouTube Video Bibliographer Implementation Slices
 
-- [ ] T001: Establish the standalone Git baseline and archive unrelated legacy documents, plans, skills, content, backups, and agent scaffolding.
+- [x] T001: Establish the standalone Git baseline and archive unrelated legacy documents, plans, skills, content, backups, and agent scaffolding.
 - [ ] T002: Replace mixed project documentation with the canonical glossary, scoped ADRs, README, aligned skill contract, and active implementation notes.
 - [ ] T003: Implement complete transcript normalization and bounded timestamp-preserving chunking without global truncation.
 - [ ] T004: Implement Codex-only candidate extraction, confidence/verification fields, bounded concurrency, retries, and hierarchical synthesis.
