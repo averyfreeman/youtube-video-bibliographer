@@ -1,6 +1,6 @@
 # YouTube Video Bibliographer
 
-This is a standalone Next.js prototype for turning a YouTube video into a timestamped historical bibliography. It is intentionally scoped to one page at `/app`; the former portfolio pages and unrelated image-generation routes are not part of this prototype.
+This is a standalone Next.js prototype for turning a YouTube video into a timestamped historical bibliography. It is intentionally scoped to one page at `/app`.
 
 The server retrieves the video's captions, splits them into bounded overlapping chunks, asks the locally installed Codex CLI to find candidate historical references, and makes a final Codex web-search pass to verify and enrich those candidates. The fixed model is `gpt-5.6-luna` with `model_reasoning_effort=max`. The route does not accept an API key: it reuses the local Codex CLI's OAuth session.
 

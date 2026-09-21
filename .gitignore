@@ -49,3 +49,6 @@ next-env.d.ts
 /.codex-loop/
 /.cache/
 /.cbm-mcp/
+
+# Legacy raw Takeout payload is preserved on disk, not versioned here.
+/_deprecated/t001-legacy-baseline/content/articles/raw-takeout/*.tgz
