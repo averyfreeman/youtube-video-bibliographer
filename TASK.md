@@ -17,4 +17,6 @@ Rebase this workspace into a standalone, local-first Next.js video bibliographer
 
 ## Verification
 
-`pnpm verify`
+```sh
+pnpm verify
+```
