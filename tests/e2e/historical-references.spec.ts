@@ -257,6 +257,52 @@ test("recovers from a transient polling failure", async ({ page }) => {
   ).toBeVisible({ timeout: 10_000 });
 });
 
+test("stops polling when the job no longer exists", async ({ page }) => {
+  await page.route("**/*", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (
+      requestUrl.pathname === "/api/historical-references" &&
+      route.request().method() === "POST"
+    ) {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId,
+          status: "queued",
+          pollUrl: `/api/historical-references/${jobId}`,
+        }),
+      });
+      return;
+    }
+
+    if (
+      requestUrl.pathname === `/api/historical-references/${jobId}` &&
+      route.request().method() === "GET"
+    ) {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Job no longer exists." }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto("/app");
+  await page.getByLabel("YouTube video URL").fill(videoUrl);
+  await page.getByRole("button", { name: "Build bibliography" }).click();
+
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Job no longer exists." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Build bibliography" }),
+  ).toBeEnabled();
+});
+
 test("shows API errors without leaving a stale result", async ({ page }) => {
   await page.route(/\/api\/historical-references(?:\/|$)/, async (route) => {
     await route.fulfill({

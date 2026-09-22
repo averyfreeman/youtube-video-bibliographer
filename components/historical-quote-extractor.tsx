@@ -46,6 +46,8 @@ function isJobSnapshot(value: unknown): value is JobSnapshot {
   );
 }
 
+const MAX_POLL_FAILURES = 5;
+
 export function HistoricalQuoteExtractor() {
   const [videoUrl, setVideoUrl] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
@@ -69,8 +71,10 @@ export function HistoricalQuoteExtractor() {
 
     let stopped = false;
     let timer: number | undefined;
+    let consecutiveFailures = 0;
 
     async function poll() {
+      let retryableFailure = true;
       try {
         const response = await fetch(`/api/historical-references/${jobId}`, {
           cache: "no-store",
@@ -78,6 +82,10 @@ export function HistoricalQuoteExtractor() {
         const payload: unknown = await response.json();
 
         if (!response.ok) {
+          retryableFailure =
+            response.status === 408 ||
+            response.status === 429 ||
+            response.status >= 500;
           throw new Error(
             payload && typeof payload === "object" && "error" in payload
               ? String(payload.error)
@@ -90,6 +98,7 @@ export function HistoricalQuoteExtractor() {
         }
 
         if (!stopped) {
+          consecutiveFailures = 0;
           setError(null);
           setJob(payload);
           if (!isTerminalJobStatus(payload.status)) {
@@ -103,7 +112,13 @@ export function HistoricalQuoteExtractor() {
               ? pollError.message
               : "The bibliography job could not be read.",
           );
-          timer = window.setTimeout(poll, 1_250);
+          consecutiveFailures += 1;
+          if (retryableFailure && consecutiveFailures < MAX_POLL_FAILURES) {
+            timer = window.setTimeout(poll, 1_250);
+          } else {
+            setJob(null);
+            setJobId(null);
+          }
         }
       }
     }
