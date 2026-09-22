@@ -6,7 +6,7 @@ file = "DEFAULT_PROMPT.md"
 
 [processing]
 reasoning_effort = "medium"
-chunk_characters = 8000
+chunk_characters = 80000
 candidate_concurrency = 2
 synthesis_concurrency = 1
 verification_concurrency = 1

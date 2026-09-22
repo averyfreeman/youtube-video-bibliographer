@@ -90,6 +90,7 @@ export function HistoricalQuoteExtractor() {
         }
 
         if (!stopped) {
+          setError(null);
           setJob(payload);
           if (!isTerminalJobStatus(payload.status)) {
             timer = window.setTimeout(poll, 1_250);
@@ -102,6 +103,7 @@ export function HistoricalQuoteExtractor() {
               ? pollError.message
               : "The bibliography job could not be read.",
           );
+          timer = window.setTimeout(poll, 1_250);
         }
       }
     }

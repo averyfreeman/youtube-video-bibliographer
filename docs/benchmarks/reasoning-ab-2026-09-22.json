@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-22T19:45:35.557Z",
+  "generatedAt": "2026-09-22T20:13:04.112Z",
   "transcriptPath": "/Users/avery/build/youtube-video-bibliographer/benchmarks/fixtures/benchmark-transcript.json",
   "videoUrl": "https://www.youtube.com/watch?v=benchmark",
   "sameTranscript": true,
   "config": {
-    "chunkCharacters": 8000,
+    "chunkCharacters": 80000,
     "maxHits": 40,
     "maxRuntimeSeconds": 600
   },
   "runs": [
     {
       "reasoningEffort": "medium",
-      "elapsedMs": 67803,
+      "elapsedMs": 29267,
       "codexCalls": 2,
       "chunks": 1,
       "synthesisGroups": 1,
@@ -24,12 +24,12 @@
     },
     {
       "reasoningEffort": "high",
-      "elapsedMs": 28981,
+      "elapsedMs": 27036,
       "codexCalls": 2,
       "chunks": 1,
       "synthesisGroups": 1,
       "candidates": 3,
-      "finalHits": 4,
+      "finalHits": 3,
       "capReason": null,
       "resumeCursor": null,
       "warnings": [],
@@ -37,12 +37,12 @@
     },
     {
       "reasoningEffort": "max",
-      "elapsedMs": 114886,
+      "elapsedMs": 47841,
       "codexCalls": 2,
       "chunks": 1,
       "synthesisGroups": 1,
-      "candidates": 3,
-      "finalHits": 3,
+      "candidates": 4,
+      "finalHits": 4,
       "capReason": null,
       "resumeCursor": null,
       "warnings": [],

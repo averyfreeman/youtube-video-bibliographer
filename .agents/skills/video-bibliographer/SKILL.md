@@ -21,7 +21,7 @@ Build a compact, auditable bibliography from a spoken-video transcript. The resu
 
 ## Active project contract
 
-The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with `medium` reasoning, 8,000-character chunks, a ten-minute budget, and a 40-hit maximum. User-level Codex configuration is ignored intentionally.
+The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with `medium` reasoning, 80,000-character chunks, a ten-minute budget, and a 40-hit maximum. User-level Codex configuration is ignored intentionally.
 
 Long jobs are checkpointed. A `capped` run records elapsed time, ETA, processed cursor, cap reason, and a continuation YouTube URL using `t=<seconds>s`. A continuation is a new run filtered from that timestamp; it is not a retry of the capped job.
 

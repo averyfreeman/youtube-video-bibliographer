@@ -176,6 +176,7 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
     "/tmp/DEFAULT_PROMPT.md",
   );
   assert.equal(config.processing.reasoningEffort, "medium");
+  assert.equal(config.processing.chunkCharacters, 80_000);
   assert.equal(config.processing.maxHits, 40);
   assert.equal(config.processing.maxRuntimeSeconds, 600);
 });

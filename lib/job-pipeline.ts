@@ -794,6 +794,8 @@ export async function executeBibliographyJob(
     );
   } catch (error) {
     if (
+      signal.aborted ||
+      record.cancelRequested ||
       error instanceof PipelineCancelledError ||
       (error instanceof CodexRunnerError &&
         error.kind === "cancelled" &&

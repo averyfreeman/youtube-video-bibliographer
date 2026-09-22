@@ -97,7 +97,9 @@ async function mockBibliographyJob(
     string,
     unknown
   > = bibliographyResponse,
+  options: { transientPollFailures?: number } = {},
 ) {
+  let transientPollFailures = options.transientPollFailures ?? 0;
   await page.route("**/*", async (route) => {
     const requestUrl = new URL(route.request().url());
     if (!requestUrl.pathname.startsWith("/api/historical-references")) {
@@ -116,6 +118,20 @@ async function mockBibliographyJob(
           status: "queued",
           pollUrl: `/api/historical-references/${jobId}`,
         }),
+      });
+      return;
+    }
+
+    if (
+      requestUrl.pathname === `/api/historical-references/${jobId}` &&
+      route.request().method() === "GET" &&
+      transientPollFailures > 0
+    ) {
+      transientPollFailures -= 1;
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Temporary worker read failure." }),
       });
       return;
     }
@@ -225,6 +241,20 @@ test("shows a capped-run alert with a timestamped continuation action", async ({
   await expect(page.getByLabel("YouTube video URL")).toHaveValue(
     `${videoUrl}&t=600s`,
   );
+});
+
+test("recovers from a transient polling failure", async ({ page }) => {
+  await mockBibliographyJob(page, bibliographyResponse, {
+    transientPollFailures: 1,
+  });
+
+  await page.goto("/app");
+  await page.getByLabel("YouTube video URL").fill(videoUrl);
+  await page.getByRole("button", { name: "Build bibliography" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Bibliographic hits" }),
+  ).toBeVisible({ timeout: 10_000 });
 });
 
 test("shows API errors without leaving a stale result", async ({ page }) => {

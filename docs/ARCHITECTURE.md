@@ -21,7 +21,7 @@ The default safety envelope is 40 final hits and 600 seconds. Extraction proceed
 
 ## Processing boundaries
 
-Transcript retrieval keeps every available caption segment. `parseTimestampStart` reads `t=245s`, `t=4m5s`, and similar YouTube values; `filterTranscriptFromTimestamp` applies that cursor before chunking. The default chunk size is 8,000 characters with one-segment overlap.
+Transcript retrieval keeps every available caption segment. `parseTimestampStart` reads `t=245s`, `t=4m5s`, and similar YouTube values; `filterTranscriptFromTimestamp` applies that cursor before chunking. The default chunk size is 80,000 characters with one-segment overlap.
 
 Candidate extraction asks for high-value multi-word phrases only. `lib/phrase-curation.ts` rejects one-word concepts, introductions, show metadata, generic restatements, and repeated titles deterministically after schema validation. Candidates are deduplicated globally before any web search. Intermediate synthesis may merge evidence but receives only the curated candidates. Final verification receives a shortlist and is filtered back to its supplied titles, so it cannot expand the result set.
 

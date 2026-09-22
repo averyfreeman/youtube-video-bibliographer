@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export const DEFAULT_CHUNK_CHARACTERS = 8_000;
+export const DEFAULT_CHUNK_CHARACTERS = 80_000;
 export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 8;
 export const DEFAULT_MAX_HITS = 40;
 export const DEFAULT_MAX_RUNTIME_SECONDS = 10 * 60;

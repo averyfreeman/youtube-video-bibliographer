@@ -236,6 +236,9 @@ export async function generateStoryboardThumbnails(options: {
         options.signal,
       );
     } catch (error) {
+      if (options.signal?.aborted) {
+        throw error;
+      }
       warnings.push(
         `Storyboard thumbnails were unavailable (${error instanceof Error ? error.message : "yt-dlp failed"}).`,
       );
@@ -251,7 +254,7 @@ export async function generateStoryboardThumbnails(options: {
 
     for (const [index, hit] of options.hits.entries()) {
       if (options.signal?.aborted) {
-        break;
+        throw new Error("Storyboard generation was cancelled.");
       }
 
       const tile = storyboardTileForTimestamp(storyboard, hit.timestampSeconds);
@@ -273,6 +276,9 @@ export async function generateStoryboardThumbnails(options: {
           index,
         );
       } catch (error) {
+        if (options.signal?.aborted) {
+          throw error;
+        }
         warnings.push(
           `Thumbnail ${index + 1} could not be generated (${error instanceof Error ? error.message : "ffmpeg failed"}).`,
         );

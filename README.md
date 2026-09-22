@@ -12,7 +12,7 @@ pnpm dev
 
 Open <http://localhost:3000/app>. Set `CODEX_CLI_PATH` if `codex` is not on `PATH`, `CODEX_HOME` if OAuth lives elsewhere, or `BIBLIOGRAPHER_RUNTIME_DIR` for another job directory. The optional `BIBLIOGRAPHER_CONFIG_PATH` overrides the project config location.
 
-`bibliographer.config.toml` is project-owned and references `DEFAULT_PROMPT.md`. The default contract is medium reasoning, 8,000-character chunks, phrase-only curation, a 40-hit maximum, and a ten-minute processing budget. User-level Codex configuration and API-key environment variables are not used.
+`bibliographer.config.toml` is project-owned and references `DEFAULT_PROMPT.md`. The default contract is medium reasoning, 80,000-character chunks, phrase-only curation, a 40-hit maximum, and a ten-minute processing budget. User-level Codex configuration and API-key environment variables are not used.
 
 ## Workflow
 
