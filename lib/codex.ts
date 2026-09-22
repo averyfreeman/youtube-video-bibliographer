@@ -1,12 +1,14 @@
 import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 
 export const CODEX_MODEL = "gpt-5.6-luna";
-export const CODEX_REASONING_EFFORT = "max";
-export const CODEX_CANDIDATE_TIMEOUT_MS = 180_000;
-export const CODEX_FINAL_TIMEOUT_MS = 300_000;
+export const CODEX_REASONING_EFFORT = "medium";
+export const CODEX_CANDIDATE_TIMEOUT_MS = 300_000;
+export const CODEX_FINAL_TIMEOUT_MS = 1_800_000;
 
 export type CodexRunnerErrorKind =
-  "not-found" | "auth" | "timeout" | "failed" | "invalid-output";
+  "not-found" | "auth" | "timeout" | "cancelled" | "failed" | "invalid-output";
 
 export class CodexRunnerError extends Error {
   readonly kind: CodexRunnerErrorKind;
@@ -25,6 +27,8 @@ export type RunCodexJsonOptions = {
   schemaPath: string;
   webSearch?: boolean;
   timeoutMs?: number;
+  signal?: AbortSignal;
+  reasoningEffort?: string;
 };
 
 function commandName() {
@@ -43,7 +47,7 @@ function codexEnvironment() {
 }
 
 function looksLikeAuthFailure(output: string) {
-  return /(not logged|log in|login|oauth|unauthori[sz]ed|authentication|401)/i.test(
+  return /(not logged|log in|login|unauthori[sz]ed|authentication required|401)/i.test(
     output,
   );
 }
@@ -141,8 +145,11 @@ export function runCodexJson({
   schemaPath,
   webSearch = false,
   timeoutMs = CODEX_CANDIDATE_TIMEOUT_MS,
+  signal,
+  reasoningEffort = CODEX_REASONING_EFFORT,
 }: RunCodexJsonOptions): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    const outputSchemaPath = path.resolve(process.cwd(), schemaPath);
     const args = [
       ...(webSearch ? ["--search"] : []),
       "exec",
@@ -155,14 +162,14 @@ export function runCodexJson({
       "--model",
       CODEX_MODEL,
       "--config",
-      `model_reasoning_effort=${CODEX_REASONING_EFFORT}`,
+      `model_reasoning_effort=${reasoningEffort}`,
       "--output-schema",
-      schemaPath,
+      outputSchemaPath,
       "-",
     ];
 
     const child = spawn(commandName(), args, {
-      cwd: process.cwd(),
+      cwd: os.tmpdir(),
       env: codexEnvironment(),
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -178,7 +185,21 @@ export function runCodexJson({
 
       settled = true;
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortChild);
       callback();
+    };
+
+    const abortChild = () => {
+      child.kill("SIGTERM");
+      finish(() =>
+        reject(
+          new CodexRunnerError(
+            "cancelled",
+            "The Codex subprocess was cancelled.",
+            stderr,
+          ),
+        ),
+      );
     };
 
     const timeout = setTimeout(() => {
@@ -193,6 +214,13 @@ export function runCodexJson({
         ),
       );
     }, timeoutMs);
+
+    if (signal?.aborted) {
+      abortChild();
+      return;
+    }
+
+    signal?.addEventListener("abort", abortChild, { once: true });
 
     child.stdout.on("data", (chunk: Buffer | string) => {
       stdout += chunk.toString();

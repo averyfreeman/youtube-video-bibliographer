@@ -1,21 +1,21 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState, type FormEvent } from "react";
 
+import { ProcessFlowDiagram } from "@/components/process-flow-diagram";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   isWeakSource,
   referenceCategoryLabels,
-  type HistoricalReferencesResponse,
 } from "@/lib/historical-references";
+import {
+  isTerminalJobStatus,
+  type CreateJobResponse,
+  type JobSnapshot,
+} from "@/lib/job-types";
 import { timestampUrl } from "@/lib/markdown-export";
-
-const stages = [
-  "Retrieving captions…",
-  "Mapping the transcript timeline…",
-  "Finding historical references…",
-  "Verifying sources with web search…",
-  "Writing the bibliography…",
-];
 
 function readableEvidenceType(value: string) {
   return value.replace(/_/g, " ");
@@ -25,130 +25,205 @@ function readableQuality(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function formatDuration(seconds: number | null) {
+  if (seconds === null) {
+    return "Estimating…";
+  }
+
+  const wholeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainder = wholeSeconds % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function isJobSnapshot(value: unknown): value is JobSnapshot {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    "jobId" in value &&
+    "status" in value &&
+    "progress" in value,
+  );
+}
+
 export function HistoricalQuoteExtractor() {
   const [videoUrl, setVideoUrl] = useState("");
-  const [result, setResult] = useState<HistoricalReferencesResponse | null>(
-    null,
-  );
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<JobSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [stageIndex, setStageIndex] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isLoading =
+    isSubmitting || Boolean(job && !isTerminalJobStatus(job.status));
+  const jobStatus = job?.status;
+  const visibleHits = job?.hits ?? [];
+  const hasResults =
+    visibleHits.length > 0 ||
+    job?.status === "completed" ||
+    job?.status === "capped";
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!jobId || (jobStatus && isTerminalJobStatus(jobStatus))) {
       return;
     }
 
-    const interval = window.setInterval(() => {
-      setStageIndex((current) => (current + 1) % stages.length);
-    }, 4_000);
+    let stopped = false;
+    let timer: number | undefined;
 
-    return () => window.clearInterval(interval);
-  }, [isLoading]);
+    async function poll() {
+      try {
+        const response = await fetch(`/api/historical-references/${jobId}`, {
+          cache: "no-store",
+        });
+        const payload: unknown = await response.json();
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+        if (!response.ok) {
+          throw new Error(
+            payload && typeof payload === "object" && "error" in payload
+              ? String(payload.error)
+              : "The bibliography job could not be read.",
+          );
+        }
+
+        if (!isJobSnapshot(payload)) {
+          throw new Error("The server returned an invalid job snapshot.");
+        }
+
+        if (!stopped) {
+          setJob(payload);
+          if (!isTerminalJobStatus(payload.status)) {
+            timer = window.setTimeout(poll, 1_250);
+          }
+        }
+      } catch (pollError) {
+        if (!stopped) {
+          setError(
+            pollError instanceof Error
+              ? pollError.message
+              : "The bibliography job could not be read.",
+          );
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      stopped = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [jobId, jobStatus]);
+
+  async function startJob(requestedVideoUrl: string) {
     setError(null);
-    setResult(null);
-    setCopied(false);
-    setStageIndex(0);
-    setIsLoading(true);
+    setJob(null);
+    setJobId(null);
+    setIsSubmitting(true);
+    setVideoUrl(requestedVideoUrl);
 
     try {
       const response = await fetch("/api/historical-references", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl }),
+        body: JSON.stringify({ videoUrl: requestedVideoUrl }),
       });
-      const payload = (await response.json()) as {
-        error?: string;
-        warnings?: string[];
-        videoUrl?: string;
-        transcriptLanguage?: string | null;
-        transcriptTruncated?: boolean;
-        hits?: HistoricalReferencesResponse["hits"];
-        markdown?: string;
-      };
+      const payload = (await response.json()) as
+        CreateJobResponse | { error?: string };
 
-      if (!response.ok) {
-        throw new Error(payload.error ?? "The bibliography request failed.");
+      if (!response.ok || !("jobId" in payload)) {
+        throw new Error(
+          "error" in payload
+            ? (payload.error ?? "The bibliography worker could not be started.")
+            : "The bibliography worker returned an incomplete response.",
+        );
       }
 
-      if (
-        !payload.videoUrl ||
-        !payload.hits ||
-        !payload.markdown ||
-        payload.transcriptLanguage === undefined ||
-        payload.transcriptTruncated === undefined
-      ) {
-        throw new Error("The server returned an incomplete bibliography.");
-      }
-
-      setResult({
-        videoUrl: payload.videoUrl,
-        transcriptLanguage: payload.transcriptLanguage,
-        transcriptTruncated: payload.transcriptTruncated,
-        warnings: payload.warnings ?? [],
-        hits: payload.hits,
-        markdown: payload.markdown,
-      });
+      setJobId(payload.jobId);
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "The bibliography request failed.",
+          : "The bibliography worker could not be started.",
       );
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   }
 
-  async function copyMarkdown() {
-    if (!result) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(result.markdown);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_000);
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void startJob(videoUrl);
   }
 
-  function downloadMarkdown() {
-    if (!result) {
+  async function cancelJob() {
+    if (!jobId) {
       return;
     }
 
-    const blob = new Blob([result.markdown], {
-      type: "text/markdown;charset=utf-8",
+    const response = await fetch(`/api/historical-references/${jobId}/cancel`, {
+      method: "POST",
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "youtube-bibliography.md";
-    link.click();
-    URL.revokeObjectURL(url);
+    const payload = (await response.json()) as JobSnapshot | { error?: string };
+    if (!response.ok || !isJobSnapshot(payload)) {
+      setError(
+        "error" in payload
+          ? (payload.error ?? "The job could not be cancelled.")
+          : "The job could not be cancelled.",
+      );
+      return;
+    }
+    setJob(payload);
+  }
+
+  async function retryJob() {
+    if (!jobId) {
+      return;
+    }
+
+    setError(null);
+    const response = await fetch(`/api/historical-references/${jobId}/retry`, {
+      method: "POST",
+    });
+    const payload = (await response.json()) as JobSnapshot | { error?: string };
+    if (!response.ok || !isJobSnapshot(payload)) {
+      setError(
+        "error" in payload
+          ? (payload.error ?? "The job could not be retried.")
+          : "The job could not be retried.",
+      );
+      return;
+    }
+    setJob(payload);
+  }
+
+  function continueFromCursor() {
+    if (!job?.resumeUrl) {
+      return;
+    }
+    void startJob(job.resumeUrl);
   }
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        <header className="mb-8 space-y-4">
-          <div className="badge badge-primary badge-outline">
-            Local Codex prototype
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-8 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="badge badge-outline">Local Codex worker</div>
+            <ThemeSwitcher />
           </div>
           <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
             YouTube Video Bibliographer
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-base-content/75">
-            Give the local Codex CLI a YouTube URL. It will read the captions,
-            preserve the video timeline, and build a detailed bibliography of
-            historical quotes, publications, events, and related references.
+            Build a compact, source-grounded reading list from meaningful
+            multi-word phrases in a YouTube transcript.
           </p>
+          <ProcessFlowDiagram />
         </header>
 
         <form
-          className="card border border-base-300 bg-base-100 shadow-sm"
+          className="card card-border bg-base-100 shadow-sm"
           onSubmit={handleSubmit}
         >
           <div className="card-body gap-5">
@@ -178,20 +253,54 @@ export function HistoricalQuoteExtractor() {
                 {isLoading ? (
                   <span className="loading loading-spinner" />
                 ) : null}
-                {isLoading ? "Building bibliography" : "Build bibliography"}
+                {isLoading ? "Processing video" : "Build bibliography"}
               </button>
               <span className="text-sm text-base-content/60">
-                Captions only · local OAuth · gpt-5.6-luna / max reasoning
+                Phrase-only · max 40 hits · ten-minute budget · medium reasoning
               </span>
             </div>
-            {isLoading ? (
-              <div
-                className="alert alert-info"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="loading loading-dots loading-sm" />
-                <span>{stages[stageIndex]}</span>
+
+            {job && !isTerminalJobStatus(job.status) ? (
+              <div className="space-y-3" role="status" aria-live="polite">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span>{job.message}</span>
+                  <span className="font-mono tabular-nums">
+                    {job.progress.percent}%
+                  </span>
+                </div>
+                <progress
+                  className="progress progress-primary w-full"
+                  value={job.progress.percent}
+                  max="100"
+                />
+                <div className="grid gap-2 text-xs text-base-content/65 sm:grid-cols-2 lg:grid-cols-4">
+                  <span>
+                    Elapsed: {formatDuration(job.timing.elapsedSeconds)}
+                  </span>
+                  <span>
+                    Approx. remaining:{" "}
+                    {formatDuration(job.timing.estimatedRemainingSeconds)}
+                  </span>
+                  <span>
+                    Budget: {formatDuration(job.timing.budgetSeconds)}
+                  </span>
+                  <span>
+                    Chunks: {job.progress.completedChunks}/
+                    {job.progress.totalChunks || "…"}
+                  </span>
+                  <span>Candidate phrases: {job.progress.candidateCount}</span>
+                  <span>
+                    Hits: {job.hits.length}/{job.maxHits}
+                  </span>
+                  <span>Job: {job.jobId.slice(0, 8)}</span>
+                </div>
+                <button
+                  className="btn btn-sm btn-outline"
+                  type="button"
+                  onClick={cancelJob}
+                >
+                  Cancel job
+                </button>
               </div>
             ) : null}
           </div>
@@ -203,25 +312,65 @@ export function HistoricalQuoteExtractor() {
           </div>
         ) : null}
 
-        {result ? (
+        {job?.status === "failed" || job?.status === "cancelled" ? (
+          <div className="alert alert-warning mt-6" role="status">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <span>{job.error ?? job.message}</span>
+              <button className="btn btn-sm" type="button" onClick={retryJob}>
+                Retry from checkpoint
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {job?.status === "capped" ? (
+          <div className="alert alert-warning mt-6" role="alert">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-semibold">
+                  This run stopped at its limit.
+                </div>
+                <p className="text-sm">
+                  {job.capReason === "hits"
+                    ? `The ${job.maxHits}-hit cap was reached.`
+                    : "The ten-minute processing budget was reached."}{" "}
+                  Your partial bibliography is saved.
+                </p>
+              </div>
+              {job.resumeUrl ? (
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  onClick={continueFromCursor}
+                >
+                  Continue from {formatDuration(job.resumeFromSeconds)}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {hasResults && job ? (
           <section className="mt-10 space-y-6" aria-live="polite">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="badge badge-success badge-outline mb-3">
-                  Bibliography ready
+                <div className="badge badge-outline mb-3">
+                  {job.status === "completed"
+                    ? "Bibliography ready"
+                    : "Partial results"}
                 </div>
                 <h2 className="text-3xl font-bold">Bibliographic hits</h2>
                 <p className="mt-2 text-base-content/70">
-                  {result.hits.length} hit{result.hits.length === 1 ? "" : "s"}{" "}
+                  {visibleHits.length} hit{visibleHits.length === 1 ? "" : "s"}{" "}
                   in video order
-                  {result.transcriptLanguage
-                    ? ` · captions: ${result.transcriptLanguage}`
+                  {job.transcriptLanguage
+                    ? ` · captions: ${job.transcriptLanguage}`
                     : ""}
                 </p>
               </div>
               <a
                 className="link link-primary break-all text-sm"
-                href={result.videoUrl}
+                href={job.videoUrl}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -229,12 +378,12 @@ export function HistoricalQuoteExtractor() {
               </a>
             </div>
 
-            {result.warnings.length > 0 ? (
+            {job.warnings.length > 0 ? (
               <div className="alert alert-warning" role="status">
                 <div>
-                  <div className="font-semibold">Partial-run notes</div>
+                  <div className="font-semibold">Run notes</div>
                   <ul className="mt-1 list-disc pl-5 text-sm">
-                    {result.warnings.map((warning) => (
+                    {job.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
@@ -242,16 +391,46 @@ export function HistoricalQuoteExtractor() {
               </div>
             ) : null}
 
+            {visibleHits.length === 0 ? (
+              <div className="card card-border bg-base-100">
+                <div className="card-body">
+                  <p className="text-base-content/70">
+                    No meaningful multi-word phrases survived curation before
+                    the run stopped.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-5">
-              {result.hits.map((hit, index) => (
+              {visibleHits.map((hit, index) => (
                 <article
-                  className="card border border-base-300 bg-base-100 shadow-sm"
+                  className="card card-border bg-base-100 shadow-sm"
                   key={`${hit.timestamp}-${hit.title}`}
                 >
+                  {hit.thumbnailUrl ? (
+                    <figure className="bg-base-300">
+                      <a
+                        href={timestampUrl(job.videoUrl, hit.timestampSeconds)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Image
+                          src={hit.thumbnailUrl}
+                          alt={`Storyboard thumbnail for ${hit.title} at ${hit.timestamp}`}
+                          width={320}
+                          height={180}
+                          className="h-auto w-full object-cover sm:max-h-44"
+                          loading="lazy"
+                          unoptimized
+                        />
+                      </a>
+                    </figure>
+                  ) : null}
                   <div className="card-body gap-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        <span className="badge badge-primary">
+                        <span className="badge badge-outline">
                           {referenceCategoryLabels[hit.category]}
                         </span>
                         <span className="badge badge-ghost">
@@ -259,6 +438,9 @@ export function HistoricalQuoteExtractor() {
                         </span>
                         <span className="badge badge-ghost">
                           Confidence: {hit.confidence}
+                        </span>
+                        <span className="badge badge-ghost">
+                          {readableEvidenceType(hit.verificationStatus)}
                         </span>
                       </div>
                       <span className="text-sm text-base-content/60">
@@ -272,7 +454,7 @@ export function HistoricalQuoteExtractor() {
                         <a
                           className="timestamp-link link link-primary font-mono"
                           href={timestampUrl(
-                            result.videoUrl,
+                            job.videoUrl,
                             hit.timestampSeconds,
                           )}
                           target="_blank"
@@ -296,77 +478,85 @@ export function HistoricalQuoteExtractor() {
                       ))}
                     </div>
 
-                    <div className="border-t border-base-300 pt-4">
-                      <h4 className="font-semibold">Further reading</h4>
-                      <ul className="mt-2 space-y-2 text-sm">
-                        {hit.sources.map((source) => (
-                          <li key={source.url}>
-                            <a
-                              className="link link-primary"
-                              href={source.url}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {source.title}
-                            </a>{" "}
-                            <span className="text-base-content/60">
-                              ({readableQuality(source.quality)})
-                            </span>
-                            {isWeakSource(source) ? (
-                              <span className="ml-2 text-warning">
-                                Verify independently.
-                              </span>
-                            ) : null}
-                            {source.note ? (
-                              <span className="block text-base-content/60">
-                                {source.note}
-                              </span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <details className="border-t border-base-300 pt-4 text-sm">
+                      <summary className="cursor-pointer font-semibold">
+                        Verification and further reading
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        <p className="text-base-content/70">
+                          {hit.verificationNote}
+                        </p>
+                        <p className="text-base-content/60">
+                          Confidence reasons: {hit.confidenceReasons.join("; ")}
+                        </p>
+                        {hit.sources.length > 0 ? (
+                          <ul className="space-y-2">
+                            {hit.sources.map((source) => (
+                              <li key={source.url}>
+                                <a
+                                  className="link link-primary"
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {source.title}
+                                </a>{" "}
+                                <span className="text-base-content/60">
+                                  ({readableQuality(source.quality)})
+                                </span>
+                                {isWeakSource(source) ? (
+                                  <span className="ml-2 text-warning">
+                                    Verify independently.
+                                  </span>
+                                ) : null}
+                                {source.note ? (
+                                  <span className="block text-base-content/60">
+                                    {source.note}
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-base-content/60">
+                            No trustworthy source was available yet.
+                          </p>
+                        )}
+                      </div>
+                    </details>
                   </div>
                 </article>
               ))}
             </div>
 
-            <section className="card border border-base-300 bg-base-100 shadow-sm">
-              <div className="card-body gap-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            {job.markdown ? (
+              <div className="card card-border bg-base-100">
+                <div className="card-body flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold">Portable Markdown</h2>
+                    <h3 className="font-bold">Portable Markdown</h3>
                     <p className="text-sm text-base-content/70">
-                      Copy the full timeline or download it as a `.md` file.
+                      Open the full code block on its own page or download the
+                      exact generated file.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <Link
                       className="btn btn-sm btn-outline"
-                      type="button"
-                      onClick={copyMarkdown}
+                      href={`/app/jobs/${job.jobId}/markdown`}
                     >
-                      {copied ? "Copied" : "Copy Markdown"}
-                    </button>
-                    <button
+                      View Markdown
+                    </Link>
+                    <a
                       className="btn btn-sm btn-primary"
-                      type="button"
-                      onClick={downloadMarkdown}
+                      download="youtube-bibliography.md"
+                      href={`/api/historical-references/${job.jobId}/markdown`}
                     >
                       Download `.md`
-                    </button>
+                    </a>
                   </div>
                 </div>
-                <div className="mockup-code overflow-hidden bg-base-300">
-                  <pre
-                    className="markdown-output p-4 text-sm"
-                    aria-label="Markdown bibliography"
-                  >
-                    <code>{result.markdown}</code>
-                  </pre>
-                </div>
               </div>
-            </section>
+            ) : null}
           </section>
         ) : null}
       </div>

@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "title": "Compact bounded YouTube bibliography pipeline",
+  "description": "A ten-minute, phrase-only bibliography run with storyboard thumbnails and a timestamped continuation path.",
+  "diagrams": [
+    {
+      "id": "bibliographer_flow",
+      "title": "Compact bounded bibliography pipeline",
+      "description": "Captions move through phrase curation, bounded verification, and portable export. A cap returns a continuation timestamp.",
+      "accessibility": "Start with a YouTube URL, retrieve captions, filter from the optional timestamp, extract meaningful multi-word phrases, globally deduplicate them, verify only the shortlist, then show results and a Markdown export. If the ten-minute or forty-hit limit is reached, save the cursor and offer a continuation URL.",
+      "kind": "flowchart",
+      "data": {
+        "direction": "LR",
+        "nodes": [
+          { "id": "url", "label": "YouTube URL" },
+          { "id": "captions", "label": "Caption timeline" },
+          { "id": "cursor", "label": "Timestamp cursor" },
+          { "id": "phrases", "label": "Phrase-only extraction" },
+          { "id": "dedupe", "label": "Global dedupe" },
+          { "id": "verify", "label": "Bounded verification" },
+          { "id": "results", "label": "Results + thumbnails" },
+          { "id": "markdown", "label": "Markdown page" },
+          { "id": "cap", "label": "Cap: time or 40 hits" }
+        ],
+        "edges": [
+          { "from": "url", "to": "captions", "arrow": "-->" },
+          { "from": "captions", "to": "cursor", "arrow": "-->" },
+          { "from": "cursor", "to": "phrases", "arrow": "-->" },
+          { "from": "phrases", "to": "dedupe", "arrow": "-->" },
+          { "from": "dedupe", "to": "verify", "arrow": "-->" },
+          { "from": "verify", "to": "results", "arrow": "-->" },
+          { "from": "results", "to": "markdown", "arrow": "-->" },
+          { "from": "phrases", "to": "cap", "label": "limit", "arrow": "-.->" },
+          { "from": "verify", "to": "cap", "label": "limit", "arrow": "-.->" },
+          {
+            "from": "cap",
+            "to": "cursor",
+            "label": "continue at t=Ns",
+            "arrow": "-.->"
+          }
+        ]
+      }
+    }
+  ]
+}

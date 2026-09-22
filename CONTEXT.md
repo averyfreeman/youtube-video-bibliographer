@@ -1,23 +1,26 @@
 # YouTube Video Bibliographer Context
 
-## Purpose
+This file is the domain glossary. Runtime architecture and acceptance procedures live in `docs/ARCHITECTURE.md` and `docs/ACCEPTANCE.md`.
 
-The prototype turns a YouTube URL into a portable, source-backed historical bibliography. It is an adjunct-sized tool for a future shared-memory system, not an all-purpose personal site.
+## Terms
 
-## Vocabulary
+- **Phrase**: A curated multi-word historical expression or named subject grounded in a spoken transcript. Single words are intentionally excluded; this release has no glossary.
+- **Video timeline**: The order in which phrases are spoken. It is the canonical display and export order.
+- **Transcript segment**: One caption line with source offset, duration, normalized text, and an `HH:MM:SS` timestamp.
+- **Transcript chunk**: An overlapping prompt-sized window. Chunking limits one Codex call, not the retrieved transcript; a continuation job applies a timestamp cursor first.
+- **Candidate**: A possible phrase returned by extraction before global deduplication and source verification.
+- **Hit**: A deduplicated, source-grounded phrase shown in the results. A run returns at most 40 hits by default.
+- **Cursor**: The integer video second at which a capped run stopped. Continuation URLs use YouTube's `t=<seconds>s` query.
+- **Storyboard tile**: A UI-only 320×180 crop from a YouTube storyboard sprite sheet, linked to a hit timestamp.
+- **Bibliography job**: A persisted asynchronous run identified by UUID. Its transcript, extraction checkpoints, timing, cap state, thumbnails, and Markdown are recoverable locally.
+- **Cap reason**: `time` for the ten-minute processing budget or `hits` for the 40-hit safety limit.
+- **Checkpoint**: A durable boundary: `created`, `transcript`, `candidates`, `synthesis`, or `complete`.
 
-- **Video timeline**: The order references are spoken in the source video. It is the canonical display and export order.
-- **Hit**: A deduplicated historical reference that survived transcript evidence, synthesis, and source checks.
-- **Candidate**: A possible hit found while analyzing one timestamped transcript chunk.
-- **Evidence type**: `direct_quote` means the speaker quotes wording; `paraphrase` means the speaker restates an idea; `reference` means the speaker points to an event, work, institution, or statement without quoting it.
-- **Source quality**: `primary`, `reputable`, `secondary`, `analysis`, or `culture`. The last three are retained with an explicit verification note.
-- **Historical date**: The date or date range of the referenced historical subject, separate from the timestamp where it occurs in the video.
+## Domain invariants
 
-## Boundaries
-
-- One user-facing route: `/app`.
-- Caption retrieval only; no YouTube API key and no manual transcript fallback.
-- Local Codex CLI OAuth only; no OpenAI API key is accepted by the route.
-- Fixed Codex model `gpt-5.6-luna` and reasoning level `max`.
-- Markdown (`.md`) is the first export format. The export registry is intentionally extensible for a later `.mdx` adapter.
-- The browser receives a JSON response and renders the Markdown export locally; no bibliography is persisted.
+- Results contain meaningful multi-word phrases only; introductions, show metadata, generic restatements, and single-word concepts are rejected.
+- Global title deduplication happens before web verification. Verification may improve evidence but cannot add or broaden hits.
+- A hit is ordered by video timestamp, never by historical date, and always links to transcript evidence and the source video.
+- A capped run is terminal, preserves partial results, records elapsed time and the processed cursor, and exposes a continuation URL.
+- An unavailable source is represented explicitly with an empty source list and an explanation; the system does not invent citations.
+- Thumbnails are presentation-only and best effort. Missing `yt-dlp`, `ffmpeg`, or a storyboard produces a warning, not a failed bibliography.

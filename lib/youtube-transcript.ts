@@ -3,9 +3,9 @@ import {
   YoutubeTranscriptNotAvailableLanguageError,
 } from "youtube-transcript";
 
-export const MAX_TRANSCRIPT_CHARACTERS = 320_000;
-export const TRANSCRIPT_CHUNK_CHARACTERS = 40_000;
-export const MAX_TRANSCRIPT_CHUNKS = 8;
+/** Maximum prompt size for one Codex extraction call, not a transcript cap. */
+export const TRANSCRIPT_CHUNK_CHARACTERS = 8_000;
+export const TRANSCRIPT_CHUNK_OVERLAP_SEGMENTS = 1;
 
 export type TranscriptSegment = {
   text: string;
@@ -24,7 +24,9 @@ export type YouTubeTranscript = {
   text: string;
   language: string | null;
   segments: NormalizedTranscriptSegment[];
-  truncated: boolean;
+  /** Always false: this pipeline deliberately has no global transcript cap. */
+  truncated: false;
+  characterCount: number;
 };
 
 export type TranscriptChunk = {
@@ -37,8 +39,46 @@ export type TranscriptChunk = {
 
 export type TranscriptChunks = {
   chunks: TranscriptChunk[];
-  truncated: boolean;
+  truncated: false;
 };
+
+function parseTimeParameter(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  const parts = [...trimmed.matchAll(/(\d+(?:\.\d+)?)(h|m|s)/g)];
+  if (parts.length === 0 || parts.map((part) => part[0]).join("") !== trimmed) {
+    return null;
+  }
+
+  return parts.reduce((total, [, amount, unit]) => {
+    const multiplier = unit === "h" ? 3_600 : unit === "m" ? 60 : 1;
+    return total + Number(amount) * multiplier;
+  }, 0);
+}
+
+export function parseTimestampStart(videoUrl: string) {
+  try {
+    const url = new URL(videoUrl);
+    return parseTimeParameter(url.searchParams.get("t") ?? "") ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function filterTranscriptFromTimestamp(
+  segments: NormalizedTranscriptSegment[],
+  startSeconds: number,
+) {
+  const start = Math.max(0, Math.floor(startSeconds));
+  return segments.filter((segment) => segment.timestampSeconds >= start);
+}
 
 export function formatTimestamp(offsetMilliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(offsetMilliseconds / 1000));
@@ -79,28 +119,6 @@ function normalizeSegments(segments: TranscriptSegment[]) {
     .filter((segment) => segment.text.length > 0);
 }
 
-function takeWithinLimit(segments: NormalizedTranscriptSegment[]) {
-  const selected: NormalizedTranscriptSegment[] = [];
-  let characterCount = 0;
-
-  for (const segment of segments) {
-    const additionalCharacters =
-      segment.line.length + (selected.length > 0 ? 1 : 0);
-
-    if (
-      selected.length > 0 &&
-      characterCount + additionalCharacters > MAX_TRANSCRIPT_CHARACTERS
-    ) {
-      break;
-    }
-
-    selected.push(segment);
-    characterCount += additionalCharacters;
-  }
-
-  return selected;
-}
-
 export async function getYouTubeTranscript(
   videoUrl: string,
 ): Promise<YouTubeTranscript> {
@@ -122,39 +140,78 @@ export async function getYouTubeTranscript(
   }
 
   const normalizedSegments = normalizeSegments(segments);
-  const keptSegments = takeWithinLimit(normalizedSegments);
+  if (normalizedSegments.length === 0) {
+    throw new Error("No captions were available for this video.");
+  }
+  const text = normalizedSegments.map((segment) => segment.line).join("\n");
 
   return {
-    text: keptSegments.map((segment) => segment.line).join("\n"),
-    language: keptSegments[0]?.lang ?? normalizedSegments[0]?.lang ?? null,
-    segments: keptSegments,
-    truncated: keptSegments.length < normalizedSegments.length,
+    text,
+    language: normalizedSegments[0]?.lang ?? null,
+    segments: normalizedSegments,
+    truncated: false,
+    characterCount: text.length,
   };
+}
+
+function splitLongSegment(
+  segment: NormalizedTranscriptSegment,
+  chunkCharacters: number,
+) {
+  if (segment.line.length <= chunkCharacters) {
+    return [segment];
+  }
+
+  const prefix = `${segment.timestamp} | `;
+  const maxTextCharacters = Math.max(1, chunkCharacters - prefix.length);
+  const pieces: string[] = [];
+  let remaining = segment.text;
+
+  while (remaining.length > maxTextCharacters) {
+    let splitAt = remaining.lastIndexOf(" ", maxTextCharacters);
+    if (splitAt <= 0) {
+      splitAt = maxTextCharacters;
+    }
+
+    pieces.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    pieces.push(remaining);
+  }
+
+  return pieces.map((text) => ({
+    ...segment,
+    text,
+    line: `${prefix}${text}`,
+  }));
 }
 
 export function chunkTranscript(
   segments: NormalizedTranscriptSegment[],
+  chunkCharacters = TRANSCRIPT_CHUNK_CHARACTERS,
 ): TranscriptChunks {
+  const chunkableSegments = segments.flatMap((segment) =>
+    splitLongSegment(segment, chunkCharacters),
+  );
   const chunks: TranscriptChunk[] = [];
   let startIndex = 0;
-  let nextUnchunkedIndex = 0;
 
-  while (
-    startIndex < segments.length &&
-    chunks.length < MAX_TRANSCRIPT_CHUNKS
-  ) {
+  while (startIndex < chunkableSegments.length) {
     const chunkSegments: NormalizedTranscriptSegment[] = [];
     let characterCount = 0;
     let endIndex = startIndex;
 
-    while (endIndex < segments.length) {
-      const segment = segments[endIndex];
+    while (endIndex < chunkableSegments.length) {
+      const segment = chunkableSegments[endIndex];
       const additionalCharacters =
         segment.line.length + (chunkSegments.length > 0 ? 1 : 0);
 
+      // A single unusually long caption still belongs in the transcript.
       if (
         chunkSegments.length > 0 &&
-        characterCount + additionalCharacters > TRANSCRIPT_CHUNK_CHARACTERS
+        characterCount + additionalCharacters > chunkCharacters
       ) {
         break;
       }
@@ -173,17 +230,15 @@ export function chunkTranscript(
       segments: chunkSegments,
     });
 
-    nextUnchunkedIndex = endIndex;
-    if (endIndex >= segments.length) {
+    if (endIndex >= chunkableSegments.length) {
       break;
     }
 
-    // Keep one line at the boundary so a quote split across chunks remains visible.
-    startIndex = Math.max(startIndex + 1, endIndex - 1);
+    startIndex = Math.max(
+      startIndex + 1,
+      endIndex - TRANSCRIPT_CHUNK_OVERLAP_SEGMENTS,
+    );
   }
 
-  return {
-    chunks,
-    truncated: nextUnchunkedIndex < segments.length,
-  };
+  return { chunks, truncated: false };
 }

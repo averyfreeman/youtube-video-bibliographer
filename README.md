@@ -1,8 +1,6 @@
 # YouTube Video Bibliographer
 
-This is a standalone Next.js prototype for turning a YouTube video into a timestamped historical bibliography. It is intentionally scoped to one page at `/app`.
-
-The server retrieves the video's captions, splits them into bounded overlapping chunks, asks the locally installed Codex CLI to find candidate historical references, and makes a final Codex web-search pass to verify and enrich those candidates. The fixed model is `gpt-5.6-luna` with `model_reasoning_effort=max`. The route does not accept an API key: it reuses the local Codex CLI's OAuth session.
+This standalone Next.js application turns a YouTube URL into a compact, timestamped, source-grounded historical bibliography. Captions are retrieved locally, isolated Codex CLI OAuth workers curate meaningful multi-word phrases, and resumable job state is stored under `.runtime/jobs`.
 
 ## Run locally
 
@@ -12,20 +10,44 @@ codex login
 pnpm dev
 ```
 
-Open <http://localhost:3000/app>. If `codex` is not on `PATH`, set `CODEX_CLI_PATH`. Set `CODEX_HOME` when the OAuth session lives in a non-default Codex directory. The child process runs with a read-only sandbox and strips API-key environment variables before invoking Codex.
+Open <http://localhost:3000/app>. Set `CODEX_CLI_PATH` if `codex` is not on `PATH`, `CODEX_HOME` if OAuth lives elsewhere, or `BIBLIOGRAPHER_RUNTIME_DIR` for another job directory. The optional `BIBLIOGRAPHER_CONFIG_PATH` overrides the project config location.
+
+`bibliographer.config.toml` is project-owned and references `DEFAULT_PROMPT.md`. The default contract is medium reasoning, 8,000-character chunks, phrase-only curation, a 40-hit maximum, and a ten-minute processing budget. User-level Codex configuration and API-key environment variables are not used.
+
+## Workflow
+
+Submitting a URL returns immediately while the worker:
+
+1. retrieves and normalizes captions, applying any YouTube `t=<seconds>s` cursor;
+2. extracts a small set of meaningful multi-word phrases from larger chunks;
+3. globally deduplicates before source verification;
+4. verifies only the bounded shortlist;
+5. generates best-effort 320×180 storyboard thumbnails; and
+6. writes ordered hits and exact Markdown output.
+
+Long runs stop safely as `capped` after ten minutes or 40 projected hits. The UI preserves partial results, elapsed/ETA counters, and a continuation action that starts at the saved timestamp. Missing `yt-dlp`, `ffmpeg`, or storyboard formats produce warnings without failing the bibliography.
 
 ## Output
 
-Each hit is shown in the order it appears in the video and includes a `HH:MM:SS` link, evidence type, historical date when established, one or two analysis paragraphs, and one or two further-reading URLs. Primary sources are preferred. Secondary, analysis, and culture sources are retained but marked for independent verification. The complete ordered timeline can be copied from the code block or downloaded as `.md`.
+Each hit includes a linked `HH:MM:SS` timestamp, category, evidence type, historical date when established, faithful video evidence, concise analysis, confidence, verification status, and up to three sources. Results remain in video order. The Markdown code block lives at `/app/jobs/[jobId]/markdown`; the exact file is downloaded from `/api/historical-references/[jobId]/markdown`.
 
-## Checks
+The page defaults to a dark daisyUI theme, includes a Mermaid process diagram with a text fallback, and uses lazy storyboard images on compact result cards.
+
+## Project documents
+
+- `CONTEXT.md` defines the domain vocabulary and invariants.
+- `docs/ARCHITECTURE.md` explains bounded orchestration, persistence, media, and UI ownership.
+- `docs/ACCEPTANCE.md` records automated and manual acceptance requirements.
+- `docs/AI_SCAFFOLDING.md` describes prompts, schemas, benchmarks, and the Codex boundary.
+- `docs/diagrams/` contains the canonical Mermaid v2 diagram and generated source.
+- `docs/adr/` contains durable architecture decisions.
+- `.agents/skills/video-bibliographer/` is the reusable phrase-only extraction contract.
+
+## Checks and benchmarks
 
 ```bash
-CI=true pnpm lint
-CI=true pnpm typecheck
-CI=true pnpm test
-CI=true pnpm build
-CI=true pnpm test:e2e
+pnpm verify
+pnpm benchmark -- --transcript path/to/transcript.json --output docs/benchmarks/reasoning-ab-latest.json
 ```
 
-Captions must be available through YouTube's transcript endpoints. There is no YouTube Data API key or manual transcript editor in this prototype. Transcript processing is bounded to 320,000 characters and eight analysis chunks so the synchronous local workflow remains predictable.
+`pnpm verify` runs formatting, linting, typechecking, unit tests, the production build, and Playwright tests. The benchmark compares `medium`, `high`, and `max` on one transcript and records operational and manual-quality fields.

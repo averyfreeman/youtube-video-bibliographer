@@ -35,16 +35,23 @@ export const sourceQualities = [
 ] as const;
 
 export const confidenceLevels = ["high", "medium", "low"] as const;
+export const verificationStatuses = [
+  "verified",
+  "needs_review",
+  "unavailable",
+] as const;
 
 export const referenceCategorySchema = z.enum(referenceCategories);
 export const evidenceTypeSchema = z.enum(evidenceTypes);
 export const sourceQualitySchema = z.enum(sourceQualities);
 export const confidenceSchema = z.enum(confidenceLevels);
+export const verificationStatusSchema = z.enum(verificationStatuses);
 
 export type ReferenceCategory = z.infer<typeof referenceCategorySchema>;
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>;
 export type SourceQuality = z.infer<typeof sourceQualitySchema>;
 export type Confidence = z.infer<typeof confidenceSchema>;
+export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 
 const youtubeUrlSchema = z
   .string()
@@ -59,9 +66,11 @@ const youtubeUrlSchema = z
     );
   }, "Only YouTube URLs are supported.");
 
-export const extractionRequestSchema = z.object({
-  videoUrl: youtubeUrlSchema,
-});
+export const extractionRequestSchema = z
+  .object({
+    videoUrl: youtubeUrlSchema,
+  })
+  .strict();
 
 export type ExtractionRequest = z.infer<typeof extractionRequestSchema>;
 
@@ -102,11 +111,14 @@ export type HistoricalSource = z.infer<typeof historicalSourceSchema>;
 export const historicalReferenceSchema = baseReferenceSchema
   .extend({
     confidence: confidenceSchema,
+    confidenceReasons: z.array(z.string().trim().min(1).max(300)).min(1).max(4),
+    verificationStatus: verificationStatusSchema,
+    verificationNote: z.string().trim().min(1).max(1_000),
     analysisParagraphs: z
       .array(z.string().trim().min(1).max(4_000))
       .min(1)
       .max(2),
-    sources: z.array(historicalSourceSchema).min(1).max(2),
+    sources: z.array(historicalSourceSchema).max(3),
   })
   .strict();
 
@@ -118,6 +130,16 @@ export const historicalReferencesSchema = z
 
 export type HistoricalReference = z.infer<typeof historicalReferenceSchema>;
 export type HistoricalReferences = z.infer<typeof historicalReferencesSchema>;
+
+export const presentationHistoricalReferenceSchema = historicalReferenceSchema
+  .extend({
+    thumbnailUrl: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type PresentationHistoricalReference = z.infer<
+  typeof presentationHistoricalReferenceSchema
+>;
 
 export const historicalReferencesResponseSchema = z
   .object({

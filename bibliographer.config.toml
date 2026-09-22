@@ -1,0 +1,20 @@
+# Project-owned bibliography policy. User-level Codex configuration is ignored
+# so every isolated worker receives the same compact extraction contract.
+
+[prompt]
+file = "DEFAULT_PROMPT.md"
+
+[processing]
+reasoning_effort = "medium"
+chunk_characters = 8000
+candidate_concurrency = 2
+synthesis_concurrency = 1
+verification_concurrency = 1
+max_candidates_per_chunk = 8
+max_hits = 40
+max_runtime_minutes = 10
+
+[thumbnails]
+enabled = true
+ytdlp_path = "yt-dlp"
+ffmpeg_path = "ffmpeg"

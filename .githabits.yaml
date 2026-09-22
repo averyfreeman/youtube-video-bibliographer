@@ -1,0 +1,24 @@
+schema_version: 1.0.0
+version: 1
+profile: guided
+branch: main
+versioning: semver
+initial_tag: v0.2.0-alpha.1
+commit_style: conventional-commits
+semantic_release: true
+actions:
+  init: true
+  branch: true
+  stage: true
+  commit: true
+  tag: true
+  remote: true
+  push: true
+remote:
+  provider: github
+  owner: averyfreeman
+  name: youtube-video-bibliographer
+  visibility: public
+  alias: origin
+  status: configured
+  url: https://github.com/averyfreeman/youtube-video-bibliographer.git

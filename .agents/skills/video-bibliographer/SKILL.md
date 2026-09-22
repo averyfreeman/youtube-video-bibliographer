@@ -1,42 +1,50 @@
 ---
-name: transcript-bibliographer
-version: 1.0.0
-description: Granular extractor for historical quotes, legislative allusions, macroeconomic milestones, and executive statements from spoken transcripts.
+name: video-bibliographer
+version: 3.0.0
+description: Use when extracting and source-checking curated historical phrases from a timestamped spoken-video transcript.
 author: Assistant
-tags: [transcripts, citations, bibliography, youtube, fact-checking]
+tags: [transcripts, bibliography, citations, youtube, evidence, verification]
 ---
 
-# Transcript Bibliographer
+# Video Bibliographer
 
-Extracts, identifies, and verifies historical quotations, implicit historical/economic events, legislative milestones, and notable corporate statements found within spoken media transcripts.
+Build a compact, auditable bibliography from a spoken-video transcript. The result is a video timeline of supported multi-word historical phrases, not a glossary or line-by-line transcript summary.
 
-## Core Directives
+## Workflow
 
-1. **Extraction Scope**:
-   - Explicit historical and literary quotes (including mangled, misattributed, or paraphrased spoken versions).
-   - Implicit historical, financial, or political references (e.g., specific market panics, regulatory repeals, wartime directives).
-   - Executive and public-figure statements (e.g., tech CEO interviews, earnings commentary, policy speeches).
-   - Legislative, judicial, and regulatory filings (e.g., state acts, federal statutes, FARA filings).
+1. Read the supplied timestamped transcript window and preserve its offsets.
+2. Extract only high-value multi-word phrases: explicit quotations, named publications, historical events, financial crises, regulations, executive statements, and other named historical subjects supported by the speech.
+3. Reject single-word concepts, host or guest introductions, greetings, show/episode metadata, sponsor language, generic restatements, and ordinary transitions.
+4. Deduplicate phrase titles globally before web verification. Keep the strongest evidence and the earliest timestamp unless distinct wording materially changes the reference.
+5. Verify only the supplied shortlist. Verification may improve dates, source notes, and uncertainty, but it must not add or broaden a hit.
+6. Return at most the caller's configured hit cap, in video-timestamp order, with explicit uncertainty and unavailable sources.
 
-2. **Source Grounding Hierarchy**:
-   - **Tier 1 (Primary Sources)**: Government archives (National Security Archive, DOJ, Federal Reserve), academic registries, original publications (Esquire, books), first-hand corporate transcripts.
-   - **Tier 2 (Secondary Sources)**: High-repute financial/historical reference sites (Investopedia, Historic UK, Britannica) used *only* when primary documents are inaccessible.
+## Active project contract
 
-3. **Anti-Sanitization Formatting**:
-   - Never output timestamps as bare text or clickable video links that chat UIs may collapse, strip, or sanitize.
-   - Output every timestamp in inline monospace code formatting accompanied by an explicit text conversion: `` `[HH:MM:SS]` `` followed by `(X min, Y sec)`.
+The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with `medium` reasoning, 8,000-character chunks, a ten-minute budget, and a 40-hit maximum. User-level Codex configuration is ignored intentionally.
 
-4. **Tone & Style**:
-   - Zero conversational padding, introductory filler, or concluding summary paragraphs.
-   - Strict factual conciseness.
+Long jobs are checkpointed. A `capped` run records elapsed time, ETA, processed cursor, cap reason, and a continuation YouTube URL using `t=<seconds>s`. A continuation is a new run filtered from that timestamp; it is not a retry of the capped job.
 
-## Output Schema
+## Output fields
 
-Format every detected item as an unordered list element:
+Every bibliography hit contains:
 
-- **[Formal Name of Event, Document, Quote, or Figure]**
-  - **Type**: [Historical Quote | Legislative/Regulatory | Economic Reference | Executive Statement]
-  - **Original Source**: [[Publisher / Repository Name](URL)]
-  - **Spoken Text**: "[Exact or Paraphrased Quote from Transcript]"
-  - **Timestamp**: `[HH:MM:SS]` (X min, Y sec)
-  - **Bibliographical Context**: [Single concise sentence detailing the true historical context, rectifying any factual/phrasing errors made by the speaker]
+- `title`: a formal multi-word event, publication, quote, regulation, statement, or subject.
+- `category`: `quote`, `publication`, `event`, `financial_crisis`, `regulation`, `executive_statement`, or `other`.
+- `evidenceType`: `direct_quote`, `paraphrase`, or `reference`.
+- `timestamp`: zero-padded `HH:MM:SS` in the video.
+- `timestampSeconds`: the same video position as an integer.
+- `historicalDate`: a date or range when established, otherwise `null`.
+- `videoEvidence`: a faithful short excerpt or paraphrase grounded in the transcript.
+- `confidence`: `high`, `medium`, or `low`.
+- `confidenceReasons`: one to four concrete reasons.
+- `verificationStatus`: `verified`, `needs_review`, or `unavailable`.
+- `verificationNote`: the evidence-quality or source-verification explanation.
+- `analysisParagraphs`: one or two concise historical-context paragraphs.
+- `sources`: zero to three source records with `title`, `url`, `quality`, and nullable `note`.
+
+When no trustworthy source can be established, use `verificationStatus: "unavailable"`, `sources: []`, and explain the limitation. Never invent a URL, quotation, date, speaker, publication, or attribution.
+
+## Presentation rules
+
+Return items in video-timestamp order. Preserve linked timestamps when the output format supports Markdown or HTML. Keep the raw `HH:MM:SS` value available for machine consumers. Return no conversational padding and no glossary section.

@@ -1,7 +1,7 @@
 import type {
   HistoricalReference,
   SourceQuality,
-} from "./historical-references";
+} from "./historical-references.ts";
 
 export const exportFormats = {
   md: {
@@ -47,6 +47,9 @@ export function renderBibliographyMarkdown(
       `- Evidence type: ${hit.evidenceType.replace(/_/g, " ")}`,
       `- Historical date: ${hit.historicalDate ?? "Not established"}`,
       `- Confidence: ${hit.confidence}`,
+      `- Confidence reasons: ${hit.confidenceReasons.join("; ")}`,
+      `- Verification: ${hit.verificationStatus}`,
+      `- Verification note: ${hit.verificationNote}`,
       `- Video timestamp: [${hit.timestamp}](${timestampUrl(videoUrl, hit.timestampSeconds)})`,
       "",
       `> ${hit.videoEvidence}`,
@@ -57,7 +60,8 @@ export function renderBibliographyMarkdown(
       "",
       "### Further reading",
       "",
-      sourceLines,
+      sourceLines ||
+        "No trustworthy source was available; verify this reference independently.",
     ].join("\n");
   });
 

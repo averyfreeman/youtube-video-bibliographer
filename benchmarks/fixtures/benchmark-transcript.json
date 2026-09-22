@@ -1,0 +1,35 @@
+{
+  "text": "00:00:00 | The New Deal reshaped the relationship between the federal government and workers.\n00:00:12 | The speaker compares that program with the Marshall Plan after the Second World War.\n00:00:24 | They quote the phrase all politics is local and distinguish it from a single-word concept.",
+  "language": "en",
+  "segments": [
+    {
+      "text": "The New Deal reshaped the relationship between the federal government and workers.",
+      "offset": 0,
+      "duration": 12000,
+      "lang": "en",
+      "timestamp": "00:00:00",
+      "timestampSeconds": 0,
+      "line": "00:00:00 | The New Deal reshaped the relationship between the federal government and workers."
+    },
+    {
+      "text": "The speaker compares that program with the Marshall Plan after the Second World War.",
+      "offset": 12000,
+      "duration": 12000,
+      "lang": "en",
+      "timestamp": "00:00:12",
+      "timestampSeconds": 12,
+      "line": "00:00:12 | The speaker compares that program with the Marshall Plan after the Second World War."
+    },
+    {
+      "text": "They quote the phrase all politics is local and distinguish it from a single-word concept.",
+      "offset": 24000,
+      "duration": 12000,
+      "lang": "en",
+      "timestamp": "00:00:24",
+      "timestampSeconds": 24,
+      "line": "00:00:24 | They quote the phrase all politics is local and distinguish it from a single-word concept."
+    }
+  ],
+  "truncated": false,
+  "characterCount": 299
+}

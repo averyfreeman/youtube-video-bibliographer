@@ -19,7 +19,12 @@
           "videoEvidence"
         ],
         "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "description": "A meaningful multi-word phrase; single-word concepts are rejected after validation."
+          },
           "category": {
             "type": "string",
             "enum": [

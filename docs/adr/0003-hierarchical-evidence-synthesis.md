@@ -1,0 +1,3 @@
+# Synthesize evidence hierarchically
+
+Dense videos can produce more candidates than one Codex context can safely reconcile, so extraction runs over larger timestamp-preserving chunks and global phrase deduplication happens before a small synthesis fanout. Leaf synthesis stays non-web; one bounded shortlist is verified with web search and its titles are intersected with the supplied candidates before deterministic merging. The final schema carries confidence reasons, verification status, and explicit unavailable sources because a plausible bibliography must expose uncertainty instead of manufacturing citations.

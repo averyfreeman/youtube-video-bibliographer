@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-09-22T19:45:35.557Z",
+  "transcriptPath": "/Users/avery/build/youtube-video-bibliographer/benchmarks/fixtures/benchmark-transcript.json",
+  "videoUrl": "https://www.youtube.com/watch?v=benchmark",
+  "sameTranscript": true,
+  "config": {
+    "chunkCharacters": 8000,
+    "maxHits": 40,
+    "maxRuntimeSeconds": 600
+  },
+  "runs": [
+    {
+      "reasoningEffort": "medium",
+      "elapsedMs": 67803,
+      "codexCalls": 2,
+      "chunks": 1,
+      "synthesisGroups": 1,
+      "candidates": 3,
+      "finalHits": 3,
+      "capReason": null,
+      "resumeCursor": null,
+      "warnings": [],
+      "manualQualityNotes": "Review title precision, phrase-only rejection, and source grounding manually; elapsed time alone is not a quality score."
+    },
+    {
+      "reasoningEffort": "high",
+      "elapsedMs": 28981,
+      "codexCalls": 2,
+      "chunks": 1,
+      "synthesisGroups": 1,
+      "candidates": 3,
+      "finalHits": 4,
+      "capReason": null,
+      "resumeCursor": null,
+      "warnings": [],
+      "manualQualityNotes": "Review title precision, phrase-only rejection, and source grounding manually; elapsed time alone is not a quality score."
+    },
+    {
+      "reasoningEffort": "max",
+      "elapsedMs": 114886,
+      "codexCalls": 2,
+      "chunks": 1,
+      "synthesisGroups": 1,
+      "candidates": 3,
+      "finalHits": 3,
+      "capReason": null,
+      "resumeCursor": null,
+      "warnings": [],
+      "manualQualityNotes": "Review title precision, phrase-only rejection, and source grounding manually; elapsed time alone is not a quality score."
+    }
+  ]
+}

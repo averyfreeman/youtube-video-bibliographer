@@ -1,9 +1,14 @@
 .next
 node_modules
-.agents
 coverage
-content/articles
 playwright-report
 test-results
 package-lock.json
 pnpm-lock.yaml
+_deprecated/
+.runtime/
+.agents/skills/daisyui/
+.agents/skills/nextjs-16/
+AGENTS.md
+docs/diagrams/
+docs/RAW_PAGE_DOWNLOAD_1.md
