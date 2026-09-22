@@ -54,9 +54,12 @@ export function HistoricalQuoteExtractor() {
   const [job, setJob] = useState<JobSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pollingPaused, setPollingPaused] = useState(false);
 
   const isLoading =
-    isSubmitting || Boolean(job && !isTerminalJobStatus(job.status));
+    isSubmitting ||
+    Boolean(job && !isTerminalJobStatus(job.status)) ||
+    Boolean(jobId && pollingPaused);
   const jobStatus = job?.status;
   const visibleHits = job?.hits ?? [];
   const hasResults =
@@ -65,7 +68,11 @@ export function HistoricalQuoteExtractor() {
     job?.status === "capped";
 
   useEffect(() => {
-    if (!jobId || (jobStatus && isTerminalJobStatus(jobStatus))) {
+    if (
+      !jobId ||
+      pollingPaused ||
+      (jobStatus && isTerminalJobStatus(jobStatus))
+    ) {
       return;
     }
 
@@ -99,6 +106,7 @@ export function HistoricalQuoteExtractor() {
 
         if (!stopped) {
           consecutiveFailures = 0;
+          setPollingPaused(false);
           setError(null);
           setJob(payload);
           if (!isTerminalJobStatus(payload.status)) {
@@ -107,17 +115,24 @@ export function HistoricalQuoteExtractor() {
         }
       } catch (pollError) {
         if (!stopped) {
-          setError(
+          const message =
             pollError instanceof Error
               ? pollError.message
-              : "The bibliography job could not be read.",
-          );
+              : "The bibliography job could not be read.";
           consecutiveFailures += 1;
           if (retryableFailure && consecutiveFailures < MAX_POLL_FAILURES) {
+            setError(message);
             timer = window.setTimeout(poll, 1_250);
+          } else if (retryableFailure) {
+            setError(
+              "Status checks are paused after repeated temporary failures. The job is still running; resume checks or cancel it.",
+            );
+            setPollingPaused(true);
           } else {
+            setError(message);
             setJob(null);
             setJobId(null);
+            setPollingPaused(false);
           }
         }
       }
@@ -130,12 +145,13 @@ export function HistoricalQuoteExtractor() {
         window.clearTimeout(timer);
       }
     };
-  }, [jobId, jobStatus]);
+  }, [jobId, jobStatus, pollingPaused]);
 
   async function startJob(requestedVideoUrl: string) {
     setError(null);
     setJob(null);
     setJobId(null);
+    setPollingPaused(false);
     setIsSubmitting(true);
     setVideoUrl(requestedVideoUrl);
 
@@ -191,6 +207,12 @@ export function HistoricalQuoteExtractor() {
       return;
     }
     setJob(payload);
+    setPollingPaused(false);
+  }
+
+  function resumePolling() {
+    setError(null);
+    setPollingPaused(false);
   }
 
   async function retryJob() {
@@ -325,7 +347,27 @@ export function HistoricalQuoteExtractor() {
 
         {error ? (
           <div className="alert alert-error mt-6" role="alert">
-            <span>{error}</span>
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <span>{error}</span>
+              {pollingPaused && jobId ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="btn btn-sm"
+                    type="button"
+                    onClick={resumePolling}
+                  >
+                    Resume status checks
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    type="button"
+                    onClick={cancelJob}
+                  >
+                    Cancel job
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

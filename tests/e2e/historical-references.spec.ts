@@ -303,6 +303,25 @@ test("stops polling when the job no longer exists", async ({ page }) => {
   ).toBeEnabled();
 });
 
+test("preserves a job handle after transient polling retries are exhausted", async ({
+  page,
+}) => {
+  await mockBibliographyJob(page, bibliographyResponse, {
+    transientPollFailures: 5,
+  });
+
+  await page.goto("/app");
+  await page.getByLabel("YouTube video URL").fill(videoUrl);
+  await page.getByRole("button", { name: "Build bibliography" }).click();
+
+  await expect(
+    page.getByRole("button", { name: "Resume status checks" }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByRole("button", { name: "Processing video" }),
+  ).toBeDisabled();
+});
+
 test("shows API errors without leaving a stale result", async ({ page }) => {
   await page.route(/\/api\/historical-references(?:\/|$)/, async (route) => {
     await route.fulfill({
