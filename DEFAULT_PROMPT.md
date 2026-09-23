@@ -12,8 +12,8 @@ Analyze the provided transcript and extract a compact, high-value set of multi-w
 4. **Primary Source Verification**: Trace each retained reference to an original primary document when possible. Use reputable historical repositories only if primary documents are unavailable.
 5. **Purity of Phrasing**: If the speaker misattributes, mangles, or paraphrases a quote or fact, explain the correction briefly without inventing a new reference.
 6. **Timestamp Preservation**: Preserve the exact `HH:MM:SS` timestamp and a faithful short excerpt or paraphrase from the supplied evidence.
-7. **No invention or expansion**: Work only from the supplied candidates during synthesis and verification. Verification may improve source metadata, but may not add new hits or broaden a title.
-8. **Context and attribution**: For each retained hit, identify the speaker only when the transcript establishes a person or role; otherwise use `null`. Write one or two short paragraphs explaining what the participants were discussing around the timestamp. Keep this discussion context separate from historical analysis.
+7. **No invention or expansion**: Work only from the supplied candidates during synthesis and verification. Verification may improve source metadata, but may not add, rename, broaden, or silently drop a supplied title. If a source is uncertain, retain the phrase with `needs_review` or `unavailable`.
+8. **Separate presentation work**: Historical synthesis and verification should focus only on the phrase, its evidence, its historical identity, and its sources. Do not spend this pass generating discussion context or inferring speakers.
 9. **No filler**: Return only the requested structured output. Do not add greetings, transitional chatter, or a closing summary.
 
 ### Output Template

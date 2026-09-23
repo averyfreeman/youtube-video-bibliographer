@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contexts"],
+  "properties": {
+    "contexts": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "speaker", "discussionContextParagraphs"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "speaker": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "discussionContextParagraphs": {
+            "type": "array",
+            "maxItems": 1,
+            "items": { "type": "string", "minLength": 1, "maxLength": 1200 }
+          }
+        }
+      }
+    }
+  }
+}

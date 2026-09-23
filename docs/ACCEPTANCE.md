@@ -23,8 +23,9 @@ The prior exhaustive baseline (`5728a0ea-36c5-4d96-a94c-8d13300ccb1e`) took more
 Inspect at least one completed and one capped run. Confirm that:
 
 - one-word concepts and introduction/show metadata do not appear;
-- the preamble identifies the video and theme only where metadata or captions support it;
-- each hit’s speaker and discussion context remain distinct from historical analysis;
+- the preamble identifies the video and theme only where metadata and the YouTube description support it, with no more than four primary participants;
+- each hit’s description-only speaker attribution and optional discussion context remain distinct from historical analysis;
+- historical verification preserves the curated shortlist when optional enrichment is unavailable;
 - timestamps remain in video order and continuation URLs use `t=<seconds>s`;
 - verification does not add or broaden titles beyond the supplied shortlist;
 - thumbnails are 320×180, lazy, and linked to the associated timestamp;
@@ -33,4 +34,4 @@ Inspect at least one completed and one capped run. Confirm that:
 
 ## Reasoning benchmark
 
-Run `pnpm benchmark -- --transcript <same-transcript.json> --output docs/benchmarks/reasoning-ab-latest.json` to compare `medium`, `high`, and `max` on the same fixture. The command records elapsed time, Codex calls, chunks, synthesis groups, candidates, final hits, cap reason, resume cursor, warnings, and manual quality notes. The checked-in report under `docs/benchmarks/` records the latest controlled run or its explicit unavailable reason.
+Run `pnpm benchmark -- --transcript <same-transcript.json> --output docs/benchmarks/reasoning-ab-latest.json` to compare `medium`, `high`, and `max` on the same fixture. The command records elapsed time, total Codex calls, chunks, synthesis groups, optional context calls, candidates, final hits, cap reason, resume cursor, warnings, context warnings, and manual quality notes. The checked-in report under `docs/benchmarks/` records the latest controlled run or its explicit unavailable reason.

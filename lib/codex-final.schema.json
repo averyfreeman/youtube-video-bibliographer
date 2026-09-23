@@ -17,13 +17,11 @@
           "timestampSeconds",
           "historicalDate",
           "videoEvidence",
-          "speaker",
           "confidence",
           "confidenceReasons",
           "verificationStatus",
           "verificationNote",
           "analysisParagraphs",
-          "discussionContextParagraphs",
           "sources"
         ],
         "properties": {
@@ -60,11 +58,6 @@
             "minLength": 1,
             "maxLength": 2000
           },
-          "speaker": {
-            "type": ["string", "null"],
-            "minLength": 1,
-            "maxLength": 200
-          },
           "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
           "confidenceReasons": {
             "type": "array",
@@ -86,12 +79,6 @@
             "minItems": 1,
             "maxItems": 2,
             "items": { "type": "string", "minLength": 1, "maxLength": 4000 }
-          },
-          "discussionContextParagraphs": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 2,
-            "items": { "type": "string", "minLength": 1, "maxLength": 1200 }
           },
           "sources": {
             "type": "array",

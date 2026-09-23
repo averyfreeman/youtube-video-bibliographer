@@ -11,6 +11,10 @@ import {
   historicalCandidatesSchema,
   historicalReferencesSchema,
 } from "../lib/historical-references.ts";
+import {
+  discussionContextInputs,
+  discussionContextResponseSchema,
+} from "../lib/discussion-context.ts";
 import { deduplicateCandidates, deduplicateHits } from "../lib/job-pipeline.ts";
 import { filterMeaningfulPhrases } from "../lib/phrase-curation.ts";
 import {
@@ -49,12 +53,27 @@ function synthesisPrompt(
   return `${prompt}
 
 Benchmark the compact synthesis contract. Deduplicate the supplied candidates, keep only their supplied titles, and return a concise JSON result with no more than 40 hits. Do not use web search for this local benchmark and do not add a new title.
-For each retained hit, set speaker to null when the local benchmark does not establish attribution and provide one concise discussionContextParagraph based on the supplied evidence. Keep analysisParagraphs focused on historical significance.
+Keep analysisParagraphs focused on historical significance. Speaker and discussion context are optional post-verification enrichment fields and are not part of this benchmark's historical pass.
 
 Source video: ${videoUrl}
 SUPPLIED CANDIDATES
 ------------------
 ${JSON.stringify(candidates, null, 2)}`;
+}
+
+function contextPrompt(
+  prompt: string,
+  videoUrl: string,
+  inputs: ReturnType<typeof discussionContextInputs>,
+) {
+  return `${prompt}
+
+Benchmark the isolated context-enrichment contract. Return only exact supplied titles, with at most one short discussionContextParagraph per title. Do not add, remove, rename, reorder, or verify historical references. Set speaker to null because this fixture has no description-derived participant list. Do not use web search.
+
+Source video: ${videoUrl}
+SUPPLIED CONTEXT WINDOWS
+------------------------
+${JSON.stringify(inputs, null, 2)}`;
 }
 
 async function main() {
@@ -88,6 +107,8 @@ async function main() {
     let candidateCount = 0;
     let finalHits = 0;
     let synthesisGroups = 0;
+    let contextCalls = 0;
+    const contextWarnings: string[] = [];
     const warnings = [...config.warnings];
 
     try {
@@ -133,7 +154,37 @@ async function main() {
             "Synthesis benchmark output failed schema validation.",
           );
         }
-        finalHits = deduplicateHits(parsed.data.hits).length;
+        const retainedHits = deduplicateHits(parsed.data.hits);
+        finalHits = retainedHits.length;
+        if (retainedHits.length > 0) {
+          codexCalls += 1;
+          contextCalls += 1;
+          try {
+            const rawContext = await runCodexJson({
+              prompt: contextPrompt(
+                config.prompt,
+                videoUrl,
+                discussionContextInputs(retainedHits, transcript.segments),
+              ),
+              schemaPath: "lib/codex-context.schema.json",
+              reasoningEffort: effort,
+              timeoutMs: 90_000,
+            });
+            const parsedContext =
+              discussionContextResponseSchema.safeParse(rawContext);
+            if (!parsedContext.success) {
+              throw new Error(
+                "Context benchmark output failed schema validation.",
+              );
+            }
+          } catch (error) {
+            contextWarnings.push(
+              error instanceof Error
+                ? error.message
+                : "Context benchmark unavailable.",
+            );
+          }
+        }
       }
     } catch (error) {
       warnings.push(
@@ -147,11 +198,13 @@ async function main() {
       codexCalls,
       chunks: chunks.length,
       synthesisGroups,
+      contextCalls,
       candidates: candidateCount,
       finalHits,
       capReason: null,
       resumeCursor: null,
       warnings,
+      contextWarnings,
       manualQualityNotes:
         "Review title precision, phrase-only rejection, and source grounding manually; elapsed time alone is not a quality score.",
     });

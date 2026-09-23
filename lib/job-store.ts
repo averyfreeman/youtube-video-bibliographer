@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   DEFAULT_MAX_HITS,
   DEFAULT_MAX_RUNTIME_SECONDS,
+  MAX_HITS_LIMIT,
+  MAX_RUNTIME_SECONDS_LIMIT,
 } from "./bibliographer-config.ts";
 import {
   persistedJobSchema,
@@ -80,6 +82,14 @@ export class JobStore {
     options: JobCreateOptions = {},
   ): Promise<PersistedJob> {
     const now = new Date().toISOString();
+    const maxHits = Math.min(
+      options.maxHits ?? DEFAULT_MAX_HITS,
+      MAX_HITS_LIMIT,
+    );
+    const maxRuntimeSeconds = Math.min(
+      options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
+      MAX_RUNTIME_SECONDS_LIMIT,
+    );
     const record = persistedJobSchema.parse({
       jobId,
       status: "queued",
@@ -104,7 +114,7 @@ export class JobStore {
       timing: {
         elapsedSeconds: 0,
         estimatedRemainingSeconds: null,
-        budgetSeconds: options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
+        budgetSeconds: maxRuntimeSeconds,
       },
       startedAt: null,
       processingStartSeconds: 0,
@@ -112,7 +122,7 @@ export class JobStore {
       capReason: null,
       resumeFromSeconds: null,
       resumeUrl: null,
-      maxHits: options.maxHits ?? DEFAULT_MAX_HITS,
+      maxHits,
       createdAt: now,
       updatedAt: now,
       chunkCharacters: null,
@@ -121,8 +131,7 @@ export class JobStore {
       failedChunks: [],
       synthesisByGroup: {},
       checkpoint: "created",
-      maxRuntimeSeconds:
-        options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
+      maxRuntimeSeconds,
       thumbnailPaths: {},
       videoMetadata: null,
     });

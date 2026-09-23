@@ -36,8 +36,8 @@ Every bibliography hit contains:
 - `timestampSeconds`: the same video position as an integer.
 - `historicalDate`: a date or range when established, otherwise `null`.
 - `videoEvidence`: a faithful short excerpt or paraphrase grounded in the transcript.
-- `speaker`: an explicitly supported person or role, otherwise `null`.
-- `discussionContextParagraphs`: one or two short paragraphs describing what the participants were discussing around the timestamp.
+- `speaker`: a participant explicitly supported by the video description, otherwise `null`; never infer it from nearby captions.
+- `discussionContextParagraphs`: zero or one short optional paragraph describing what the participants were discussing around the timestamp.
 - `confidence`: `high`, `medium`, or `low`.
 - `confidenceReasons`: one to four concrete reasons.
 - `verificationStatus`: `verified`, `needs_review`, or `unavailable`.
@@ -45,10 +45,10 @@ Every bibliography hit contains:
 - `analysisParagraphs`: one or two concise historical-context paragraphs.
 - `sources`: zero to three source records with `title`, `url`, `quality`, and nullable `note`.
 
-The result may also include a `videoOverview` preamble with title, channel, upload/publication date, people, theme, and summary. Metadata and orientation are best effort; use null or an empty list when the evidence does not establish a field.
+The result may also include a `videoOverview` preamble with title, channel, upload/publication date, people, theme, and summary. The overview uses YouTube metadata and description only; identify at most four primary participants explicitly labeled there. Use null or an empty list when the description does not establish a field.
 
 When no trustworthy source can be established, use `verificationStatus: "unavailable"`, `sources: []`, and explain the limitation. Never invent a URL, quotation, date, speaker, publication, or attribution.
 
 ## Presentation rules
 
-Return items in video-timestamp order. Preserve linked timestamps when the output format supports Markdown or HTML. Keep the raw `HH:MM:SS` value available for machine consumers. Keep discussion context separate from historical analysis. Return no conversational padding and no glossary section.
+Return items in video-timestamp order. Preserve linked timestamps when the output format supports Markdown or HTML. Keep the raw `HH:MM:SS` value available for machine consumers. Keep optional discussion context separate from historical analysis. Return no conversational padding and no glossary section.

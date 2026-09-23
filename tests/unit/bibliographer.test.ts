@@ -10,6 +10,10 @@ import {
   parseBibliographerToml,
 } from "../../lib/bibliographer-config.ts";
 import { buildVideoOverview } from "../../lib/video-overview.ts";
+import {
+  discussionContextInputs,
+  mergeDiscussionContext,
+} from "../../lib/discussion-context.ts";
 import { parseYouTubeMetadata } from "../../lib/youtube-metadata.ts";
 import {
   historicalReferencesSchema,
@@ -21,7 +25,11 @@ import {
   calculateEtaSeconds,
   isTerminalJobStatus,
 } from "../../lib/job-types.ts";
-import { deduplicateCandidates } from "../../lib/job-pipeline.ts";
+import {
+  deduplicateCandidates,
+  preserveSuppliedCandidates,
+  preserveSuppliedHits,
+} from "../../lib/job-pipeline.ts";
 import {
   isIntroductionOrShowMetadata,
   isMeaningfulPhrase,
@@ -148,7 +156,7 @@ test("parses metadata into a reader-facing video overview", () => {
     description: "A short description.",
   });
   const overview = buildVideoOverview(metadata, {
-    people: ["Host", "Guest"],
+    people: ["Host", "Guest", "Co-host", "Interviewer", "Mentioned"],
     theme: "Historical discussion",
     summary: "A concise orientation.",
   });
@@ -156,7 +164,117 @@ test("parses metadata into a reader-facing video overview", () => {
   assert.equal(overview.title, "A video title");
   assert.equal(overview.date, "2026-09-22");
   assert.equal(overview.dateKind, "uploaded");
-  assert.deepEqual(overview.people, ["Host", "Guest"]);
+  assert.deepEqual(overview.people, [
+    "Host",
+    "Guest",
+    "Co-host",
+    "Interviewer",
+  ]);
+});
+
+test("keeps discussion enrichment bounded and exact-title only", () => {
+  const hits = [
+    {
+      title: "A historical quote",
+      category: "quote" as const,
+      evidenceType: "direct_quote" as const,
+      timestamp: "00:00:20",
+      timestampSeconds: 20,
+      historicalDate: null,
+      videoEvidence: "A short quote.",
+      speaker: null,
+      confidence: "medium" as const,
+      confidenceReasons: ["The transcript contains the phrase."],
+      verificationStatus: "needs_review" as const,
+      verificationNote: "Needs source review.",
+      analysisParagraphs: ["Historical analysis."],
+      discussionContextParagraphs: [],
+      sources: [],
+    },
+  ];
+  const inputs = discussionContextInputs(hits, [
+    segment(0, "before"),
+    segment(20, "near the quote"),
+    segment(100, "far away"),
+  ]);
+  assert.match(inputs[0]?.context ?? "", /near the quote/);
+  assert.doesNotMatch(inputs[0]?.context ?? "", /far away/);
+
+  const merged = mergeDiscussionContext(
+    hits,
+    {
+      contexts: [
+        {
+          title: "A historical quote",
+          speaker: "Guest",
+          discussionContextParagraphs: ["The pair were discussing the source."],
+        },
+        {
+          title: "An invented title",
+          speaker: "Invented speaker",
+          discussionContextParagraphs: ["This must not be added."],
+        },
+      ],
+    },
+    ["Host", "Guest"],
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0]?.speaker, "Guest");
+  assert.deepEqual(merged[0]?.discussionContextParagraphs, [
+    "The pair were discussing the source.",
+  ]);
+
+  const unsupportedSpeaker = mergeDiscussionContext(
+    hits,
+    {
+      contexts: [
+        {
+          title: "A historical quote",
+          speaker: "Not listed in the description",
+          discussionContextParagraphs: ["A concise context."],
+        },
+      ],
+    },
+    ["Host", "Guest"],
+  );
+  assert.equal(unsupportedSpeaker[0]?.speaker, null);
+});
+
+test("preserves curated candidates and verified hit order", () => {
+  const candidate = {
+    title: "A historical event",
+    category: "event" as const,
+    evidenceType: "reference" as const,
+    timestamp: "00:00:10",
+    timestampSeconds: 10,
+    historicalDate: null,
+    videoEvidence: "The event is named.",
+  };
+  const fallback = preserveSuppliedCandidates([], []);
+  assert.deepEqual(fallback, []);
+
+  const retained = preserveSuppliedCandidates([candidate], []);
+  assert.equal(retained.length, 1);
+  assert.equal(retained[0]?.title, candidate.title);
+  assert.equal(retained[0]?.verificationStatus, "needs_review");
+
+  const verified = {
+    ...retained[0]!,
+    title: "A HISTORICAL EVENT",
+    verificationStatus: "verified" as const,
+    verificationNote: "Verified against a primary source.",
+  };
+  const preserved = preserveSuppliedHits(retained, []);
+  assert.equal(preserved[0]?.verificationStatus, "needs_review");
+  assert.match(preserved[0]?.verificationNote ?? "", /retained for review/);
+  assert.equal(
+    preserveSuppliedHits(retained, [verified])[0]?.verificationStatus,
+    "verified",
+  );
+  assert.equal(
+    preserveSuppliedHits(retained, [verified])[0]?.title,
+    candidate.title,
+  );
 });
 
 test("limits discussion context to the timestamp window", () => {
@@ -232,6 +350,19 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
   assert.equal(config.processing.chunkCharacters, 80_000);
   assert.equal(config.processing.maxHits, 40);
   assert.equal(config.processing.maxRuntimeSeconds, 600);
+
+  const boundedConfig = buildBibliographerConfig(
+    parseBibliographerToml(`
+      [processing]
+      max_hits = 80
+      max_runtime_minutes = 20
+    `),
+    "phrase-only",
+    "/tmp/bibliographer.config.toml",
+    "/tmp/DEFAULT_PROMPT.md",
+  );
+  assert.equal(boundedConfig.processing.maxHits, 40);
+  assert.equal(boundedConfig.processing.maxRuntimeSeconds, 600);
 });
 
 test("uses contrasting Mermaid palettes for dark and light themes", () => {
@@ -346,10 +477,17 @@ test("renders ordered Markdown and labels weak sources", () => {
   assert.match(markdown, /00:02:03/);
   assert.match(markdown, /verify independently/);
   assert.match(markdown, /## About this video/);
-  assert.match(markdown, /### Discussion context/);
-  assert.match(markdown, /### Historical analysis/);
+  assert.match(markdown, /### What they were discussing/);
+  assert.match(markdown, /### Why this reference matters/);
   assert.match(markdown, /Speaker: The guest/);
   assert.equal(isWeakSource(hit.sources[0]), true);
+
+  const withoutContext = renderBibliographyMarkdown(
+    "https://www.youtube.com/watch?v=example123",
+    null,
+    [{ ...hit, discussionContextParagraphs: [] }],
+  );
+  assert.doesNotMatch(withoutContext, /What they were discussing/);
 });
 
 test("parses direct Codex output", () => {
@@ -464,8 +602,10 @@ test("persists capped state, timing budget, and continuation metadata", async ()
     const created = await store.create(
       "https://www.youtube.com/watch?v=example123",
       "00000000-0000-4000-8000-000000000003",
-      { maxHits: 40, maxRuntimeSeconds: 600 },
+      { maxHits: 80, maxRuntimeSeconds: 1_200 },
     );
+    assert.equal(created.maxHits, 40);
+    assert.equal(created.maxRuntimeSeconds, 600);
     const capped = await store.write({
       ...created,
       status: "capped",

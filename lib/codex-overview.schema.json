@@ -11,7 +11,7 @@
       "properties": {
         "people": {
           "type": "array",
-          "maxItems": 8,
+          "maxItems": 4,
           "items": { "type": "string", "minLength": 1, "maxLength": 200 }
         },
         "theme": {

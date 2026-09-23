@@ -140,21 +140,21 @@ export function isRetryableJobStatus(status: JobStatus) {
 export function phaseMessage(phase: JobPhase) {
   switch (phase) {
     case "queued":
-      return "Waiting for a local Codex worker.";
+      return "Getting ready to read the video.";
     case "retrieving_transcript":
-      return "Retrieving and normalizing the complete caption timeline.";
+      return "Reading the captions.";
     case "extracting_candidates":
-      return "Finding meaningful multi-word phrases in the transcript.";
+      return "Finding historical references.";
     case "synthesizing":
-      return "Deduplicating references and verifying sources.";
+      return "Checking sources and keeping the strongest references.";
     case "completed":
-      return "Bibliography ready.";
+      return "Your reading list is ready.";
     case "failed":
-      return "The bibliography job failed.";
+      return "We could not finish this reading list.";
     case "cancelled":
-      return "The bibliography job was cancelled.";
+      return "This reading list was cancelled.";
     case "capped":
-      return "The run reached its processing limit; continue from the saved timestamp.";
+      return "This run reached its limit; continue from the saved timestamp when you are ready.";
   }
 }
 

@@ -139,9 +139,8 @@ export const historicalReferenceSchema = baseReferenceSchema
       .max(2),
     discussionContextParagraphs: z
       .array(z.string().trim().min(1).max(1_200))
-      .min(1)
-      .max(2)
-      .default(["Discussion context was not available for this run."]),
+      .max(1)
+      .default([]),
     sources: z.array(historicalSourceSchema).max(3),
   })
   .strict();

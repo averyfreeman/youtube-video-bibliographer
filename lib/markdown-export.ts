@@ -32,7 +32,7 @@ function renderVideoOverview(overview: VideoOverview | null) {
     return [
       "## About this video",
       "",
-      "Video orientation was not available for this run.",
+      "A short video overview was not available for this run.",
     ].join("\n");
   }
 
@@ -42,7 +42,7 @@ function renderVideoOverview(overview: VideoOverview | null) {
   const people =
     overview.people.length > 0
       ? overview.people.join(", ")
-      : "Not established from the available evidence";
+      : "Not established in the video description";
 
   return [
     "## About this video",
@@ -50,8 +50,8 @@ function renderVideoOverview(overview: VideoOverview | null) {
     `- Title: ${overviewValue(overview.title, "Not established")}`,
     `- Channel: ${overviewValue(overview.channel, "Not established")}`,
     `- ${dateLabel}`,
-    `- People: ${people}`,
-    `- Theme: ${overviewValue(overview.theme, "Not established")}`,
+    `- People in the conversation: ${people}`,
+    `- What the video is about: ${overviewValue(overview.theme, "Not established")}`,
     "",
     overviewValue(
       overview.summary,
@@ -89,20 +89,24 @@ export function renderBibliographyMarkdown(
       `- Confidence reasons: ${hit.confidenceReasons.join("; ")}`,
       `- Verification: ${hit.verificationStatus}`,
       `- Verification note: ${hit.verificationNote}`,
-      `- Speaker: ${hit.speaker ?? "Attribution not established from captions"}`,
+      `- Speaker: ${hit.speaker ?? "Speaker not established in the video description"}`,
       `- Video timestamp: [${hit.timestamp}](${timestampUrl(videoUrl, hit.timestampSeconds)})`,
       "",
       `> ${hit.videoEvidence}`,
       "",
-      "### Discussion context",
-      "",
-      ...hit.discussionContextParagraphs,
-      "",
-      "### Historical analysis",
+      ...(hit.discussionContextParagraphs.length > 0
+        ? [
+            "### What they were discussing",
+            "",
+            ...hit.discussionContextParagraphs,
+            "",
+          ]
+        : []),
+      "### Why this reference matters",
       "",
       ...hit.analysisParagraphs,
       "",
-      "### Further reading",
+      "### Sources and further reading",
       "",
       sourceLines ||
         "No trustworthy source was available; verify this reference independently.",
@@ -116,11 +120,11 @@ export function renderBibliographyMarkdown(
     "",
     renderVideoOverview(overview),
     "",
-    "The hits below follow the order in which the historical references appear in the video.",
+    "The references below follow the order in which they appear in the video.",
     "",
     sections.length > 0
       ? sections.join("\n\n")
-      : "No historical references were found.",
+      : "No strong historical references were found.",
     "",
   ].join("\n");
 }

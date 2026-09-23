@@ -248,15 +248,15 @@ export function HistoricalQuoteExtractor() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="badge badge-outline">Local Codex worker</div>
+            <div className="badge badge-outline">Local research helper</div>
             <ThemeSwitcher />
           </div>
           <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
             YouTube Video Bibliographer
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-base-content/75">
-            Build a compact, source-grounded reading list from meaningful
-            multi-word phrases in a YouTube transcript.
+            Discover historical references and the events behind the quotes
+            people are discussing.
           </p>
           <ProcessFlowDiagram />
         </header>
@@ -269,7 +269,7 @@ export function HistoricalQuoteExtractor() {
             <div>
               <label className="label" htmlFor="video-url">
                 <span className="label-text font-semibold">
-                  YouTube video URL
+                  YouTube video to explore
                 </span>
               </label>
               <input
@@ -292,11 +292,11 @@ export function HistoricalQuoteExtractor() {
                 {isLoading ? (
                   <span className="loading loading-spinner" />
                 ) : null}
-                {isLoading ? "Processing video" : "Build bibliography"}
+                {isLoading ? "Reading the video" : "Find historical references"}
               </button>
               <span className="text-sm text-base-content/60">
-                Phrase-only · max 40 hits · ten-minute budget · high-recall
-                extraction
+                A focused reading list · up to 40 references · usually ready
+                within ten minutes
               </span>
             </div>
 
@@ -325,12 +325,14 @@ export function HistoricalQuoteExtractor() {
                     Budget: {formatDuration(job.timing.budgetSeconds)}
                   </span>
                   <span>
-                    Chunks: {job.progress.completedChunks}/
+                    Caption sections: {job.progress.completedChunks}/
                     {job.progress.totalChunks || "…"}
                   </span>
-                  <span>Candidate phrases: {job.progress.candidateCount}</span>
                   <span>
-                    Hits: {job.hits.length}/{job.maxHits}
+                    Possible references: {job.progress.candidateCount}
+                  </span>
+                  <span>
+                    References kept: {job.hits.length}/{job.maxHits}
                   </span>
                   <span>Job: {job.jobId.slice(0, 8)}</span>
                 </div>
@@ -394,7 +396,7 @@ export function HistoricalQuoteExtractor() {
                   {job.capReason === "hits"
                     ? `The ${job.maxHits}-hit cap was reached.`
                     : "The ten-minute processing budget was reached."}{" "}
-                  Your partial bibliography is saved.
+                  Your partial reading list is saved.
                 </p>
               </div>
               {job.resumeUrl ? (
@@ -416,10 +418,10 @@ export function HistoricalQuoteExtractor() {
               <div>
                 <div className="badge badge-outline mb-3">
                   {job.status === "completed"
-                    ? "Bibliography ready"
-                    : "Partial results"}
+                    ? "Reading list ready"
+                    : "Partial reading list"}
                 </div>
-                <h2 className="text-3xl font-bold">Bibliographic hits</h2>
+                <h2 className="text-3xl font-bold">Historical references</h2>
                 <p className="mt-2 text-base-content/70">
                   {visibleHits.length} hit{visibleHits.length === 1 ? "" : "s"}{" "}
                   in video order
@@ -441,7 +443,7 @@ export function HistoricalQuoteExtractor() {
             {job.warnings.length > 0 ? (
               <div className="alert alert-warning" role="status">
                 <div>
-                  <div className="font-semibold">Run notes</div>
+                  <div className="font-semibold">A few notes</div>
                   <ul className="mt-1 list-disc pl-5 text-sm">
                     {job.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
@@ -480,17 +482,17 @@ export function HistoricalQuoteExtractor() {
                     </div>
                     <div>
                       <dt className="font-semibold text-base-content/60">
-                        People
+                        People in the conversation
                       </dt>
                       <dd>
                         {job.videoOverview?.people.length
                           ? job.videoOverview.people.join(", ")
-                          : "Not established from the available evidence"}
+                          : "Not established in the video description"}
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="font-semibold text-base-content/60">
-                        Theme
+                        What the video is about
                       </dt>
                       <dd>{job.videoOverview?.theme ?? "Not established"}</dd>
                     </div>
@@ -507,8 +509,8 @@ export function HistoricalQuoteExtractor() {
               <div className="card card-border bg-base-100">
                 <div className="card-body">
                   <p className="text-base-content/70">
-                    No meaningful multi-word phrases survived curation before
-                    the run stopped.
+                    No strong historical references surfaced before the run
+                    stopped.
                   </p>
                 </div>
               </div>
@@ -581,7 +583,7 @@ export function HistoricalQuoteExtractor() {
                       <p className="mt-2 text-sm text-base-content/70">
                         Speaker:{" "}
                         {hit.speaker ??
-                          "Attribution not established from captions."}
+                          "Not established in the video description."}
                       </p>
                     </div>
 
@@ -589,18 +591,20 @@ export function HistoricalQuoteExtractor() {
                       {hit.videoEvidence}
                     </blockquote>
 
-                    <div className="space-y-2 text-sm leading-6 text-base-content/75">
-                      <h4 className="font-semibold text-base-content">
-                        Discussion context
-                      </h4>
-                      {hit.discussionContextParagraphs.map((paragraph) => (
-                        <p key={paragraph}>{paragraph}</p>
-                      ))}
-                    </div>
+                    {hit.discussionContextParagraphs.length > 0 ? (
+                      <div className="space-y-2 text-sm leading-6 text-base-content/75">
+                        <h4 className="font-semibold text-base-content">
+                          What they were discussing
+                        </h4>
+                        {hit.discussionContextParagraphs.map((paragraph) => (
+                          <p key={paragraph}>{paragraph}</p>
+                        ))}
+                      </div>
+                    ) : null}
 
                     <div>
                       <h4 className="mb-2 font-semibold">
-                        Historical analysis
+                        Why this reference matters
                       </h4>
                       <div className="bibliographer-prose leading-7 text-base-content/80">
                         {hit.analysisParagraphs.map((paragraph) => (
@@ -611,7 +615,7 @@ export function HistoricalQuoteExtractor() {
 
                     <details className="border-t border-base-300 pt-4 text-sm">
                       <summary className="cursor-pointer font-semibold">
-                        Verification and further reading
+                        Sources and further reading
                       </summary>
                       <div className="mt-3 space-y-3">
                         <p className="text-base-content/70">
@@ -664,7 +668,7 @@ export function HistoricalQuoteExtractor() {
               <div className="card card-border bg-base-100">
                 <div className="card-body flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-bold">Portable Markdown</h3>
+                    <h3 className="font-bold">Downloadable Markdown</h3>
                     <p className="text-sm text-base-content/70">
                       Open the full code block on its own page or download the
                       exact generated file.

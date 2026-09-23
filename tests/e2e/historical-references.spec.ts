@@ -178,11 +178,13 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
   await mockBibliographyJob(page);
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
-    page.getByRole("heading", { name: "Bibliographic hits" }),
+    page.getByRole("heading", { name: "Historical references" }),
   ).toBeVisible();
   const cards = page.locator("article");
   await expect(cards).toHaveCount(2);
@@ -193,10 +195,11 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Host, Guest")).toBeVisible();
   await expect(cards.nth(1)).toContainText("Speaker: The guest");
-  await expect(cards.nth(1)).toContainText("Discussion context");
+  await expect(cards.nth(1)).toContainText("What they were discussing");
   await cards.nth(1).locator("details").locator("summary").click();
   await expect(page.getByText("Verify independently.")).toBeVisible();
   await expect(page.getByLabel("Markdown bibliography")).toHaveCount(0);
+  await expect(page.locator("pre")).toHaveCount(0);
   await expect(page.getByText("Text description of the process")).toBeVisible();
   await expect(page.locator("img[alt^='Storyboard thumbnail']")).toHaveCount(1);
   const markdownLink = page.getByRole("link", { name: "View Markdown" });
@@ -211,8 +214,10 @@ test("downloads the rendered Markdown bibliography", async ({ page }) => {
   await mockBibliographyJob(page);
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   const downloadLink = page.getByRole("link", { name: "Download `.md`" });
   await expect(downloadLink).toHaveAttribute(
@@ -254,14 +259,16 @@ test("shows a capped-run alert with a timestamped continuation action", async ({
   await mockBibliographyJob(page, cappedResponse);
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
     page.getByRole("alert").filter({ hasText: "ten-minute processing budget" }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Continue from/ }).click();
-  await expect(page.getByLabel("YouTube video URL")).toHaveValue(
+  await expect(page.getByLabel("YouTube video to explore")).toHaveValue(
     `${videoUrl}&t=600s`,
   );
 });
@@ -272,11 +279,13 @@ test("recovers from a transient polling failure", async ({ page }) => {
   });
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
-    page.getByRole("heading", { name: "Bibliographic hits" }),
+    page.getByRole("heading", { name: "Historical references" }),
   ).toBeVisible({ timeout: 10_000 });
 });
 
@@ -315,14 +324,16 @@ test("stops polling when the job no longer exists", async ({ page }) => {
   });
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
     page.getByRole("alert").filter({ hasText: "Job no longer exists." }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Build bibliography" }),
+    page.getByRole("button", { name: "Find historical references" }),
   ).toBeEnabled();
 });
 
@@ -334,14 +345,16 @@ test("preserves a job handle after transient polling retries are exhausted", asy
   });
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
     page.getByRole("button", { name: "Resume status checks" }),
   ).toBeVisible({ timeout: 10_000 });
   await expect(
-    page.getByRole("button", { name: "Processing video" }),
+    page.getByRole("button", { name: "Reading the video" }),
   ).toBeDisabled();
 });
 
@@ -355,8 +368,10 @@ test("shows API errors without leaving a stale result", async ({ page }) => {
   });
 
   await page.goto("/app");
-  await page.getByLabel("YouTube video URL").fill(videoUrl);
-  await page.getByRole("button", { name: "Build bibliography" }).click();
+  await page.getByLabel("YouTube video to explore").fill(videoUrl);
+  await page
+    .getByRole("button", { name: "Find historical references" })
+    .click();
 
   await expect(
     page
@@ -364,7 +379,7 @@ test("shows API errors without leaving a stale result", async ({ page }) => {
       .filter({ hasText: "Captions could not be retrieved." }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Bibliographic hits" }),
+    page.getByRole("heading", { name: "Historical references" }),
   ).toHaveCount(0);
 });
 

@@ -5,6 +5,8 @@ export const DEFAULT_CHUNK_CHARACTERS = 80_000;
 export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 8;
 export const DEFAULT_MAX_HITS = 40;
 export const DEFAULT_MAX_RUNTIME_SECONDS = 10 * 60;
+export const MAX_HITS_LIMIT = 40;
+export const MAX_RUNTIME_SECONDS_LIMIT = 10 * 60;
 
 export type CodexReasoningEffort = "medium" | "high" | "xhigh" | "max";
 
@@ -170,17 +172,18 @@ export function buildBibliographerConfig(
         "processing.max_candidates_per_chunk",
         DEFAULT_MAX_CANDIDATES_PER_CHUNK,
       ),
-      maxHits: asPositiveInteger(
-        values,
-        "processing.max_hits",
-        DEFAULT_MAX_HITS,
+      maxHits: Math.min(
+        MAX_HITS_LIMIT,
+        asPositiveInteger(values, "processing.max_hits", DEFAULT_MAX_HITS),
       ),
-      maxRuntimeSeconds:
+      maxRuntimeSeconds: Math.min(
+        MAX_RUNTIME_SECONDS_LIMIT,
         asPositiveInteger(
           values,
           "processing.max_runtime_minutes",
           DEFAULT_MAX_RUNTIME_SECONDS / 60,
         ) * 60,
+      ),
     },
     thumbnails: {
       enabled: asBoolean(values, "thumbnails.enabled", true),

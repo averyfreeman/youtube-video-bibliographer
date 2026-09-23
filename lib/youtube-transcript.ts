@@ -42,8 +42,8 @@ export type TranscriptChunks = {
   truncated: false;
 };
 
-export const TRANSCRIPT_CONTEXT_RADIUS_SECONDS = 90;
-export const TRANSCRIPT_CONTEXT_MAX_CHARACTERS = 4_000;
+export const TRANSCRIPT_CONTEXT_RADIUS_SECONDS = 30;
+export const TRANSCRIPT_CONTEXT_MAX_CHARACTERS = 1_200;
 
 function parseTimeParameter(value: string) {
   const trimmed = value.trim().toLowerCase();

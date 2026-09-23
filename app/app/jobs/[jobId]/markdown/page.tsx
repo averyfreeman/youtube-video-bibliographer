@@ -28,10 +28,10 @@ export default async function MarkdownPage({
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="badge badge-outline mb-3">Markdown export</div>
+            <div className="badge badge-outline mb-3">Your Markdown copy</div>
             <h1 className="text-3xl font-bold">YouTube Video Bibliography</h1>
             <p className="mt-2 text-base-content/70">
-              The exact Markdown generated for this bibliography run.
+              The exact reading list generated from this video.
             </p>
           </div>
           <Link className="btn btn-sm btn-outline" href="/app">
@@ -51,10 +51,10 @@ export default async function MarkdownPage({
             download="youtube-bibliography.md"
             href={`/api/historical-references/${job.jobId}/markdown`}
           >
-            Download Markdown
+            Download the reading list
           </a>
           <Link className="btn btn-ghost" href="/app">
-            Back to bibliographer
+            Back to the video form
           </Link>
         </div>
       </div>

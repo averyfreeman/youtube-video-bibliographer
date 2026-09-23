@@ -21,8 +21,8 @@ Submitting a URL returns immediately while the worker:
 1. retrieves and normalizes captions, applying any YouTube `t=<seconds>s` cursor;
 2. extracts a small set of meaningful multi-word phrases from larger chunks;
 3. globally deduplicates before source verification;
-4. creates a factual video preamble from metadata and caption evidence;
-5. verifies only the bounded shortlist and adds transcript-local discussion context;
+4. creates a factual video preamble from metadata and the YouTube description;
+5. verifies only the bounded shortlist and optionally adds compact transcript-local discussion context afterward;
 6. generates best-effort 320×180 storyboard thumbnails; and
 7. writes ordered hits and exact Markdown output.
 
@@ -30,7 +30,7 @@ Long runs stop safely as `capped` after ten minutes or 40 projected hits. The UI
 
 ## Output
 
-The results begin with a video preamble covering title, channel, upload/publication date, people, theme, and summary when established. Each hit includes a linked `HH:MM:SS` timestamp, category, evidence type, historical date when established, speaker attribution when supported, faithful video evidence, one or two discussion-context paragraphs, concise historical analysis, confidence, verification status, and up to three sources. Results remain in video order. The Markdown code block lives at `/app/jobs/[jobId]/markdown`; the exact file is downloaded from `/api/historical-references/[jobId]/markdown`.
+The results begin with a video preamble covering title, channel, upload/publication date, description-supported primary participants, theme, and summary when established. Each hit includes a linked `HH:MM:SS` timestamp, category, evidence type, historical date when established, description-only speaker attribution when supported, faithful video evidence, optional compact discussion context, concise historical analysis, confidence, verification status, and up to three sources. Results remain in video order. The Markdown code block lives at `/app/jobs/[jobId]/markdown`; the exact file is downloaded from `/api/historical-references/[jobId]/markdown`.
 
 The page defaults to a dark daisyUI theme, includes a Mermaid process diagram with a text fallback, and uses lazy storyboard images on compact result cards.
 
