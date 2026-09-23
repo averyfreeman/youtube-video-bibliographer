@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ProcessFlowDiagram } from "@/components/process-flow-diagram";
-import { ThemeSwitcher } from "@/components/theme-switcher";
+import {
+  isTheme,
+  ThemeSwitcher,
+  type Theme,
+} from "@/components/theme-switcher";
 import {
   isWeakSource,
   referenceCategoryLabels,
@@ -50,6 +54,7 @@ const MAX_POLL_FAILURES = 5;
 
 export function HistoricalQuoteExtractor() {
   const [videoUrl, setVideoUrl] = useState("");
+  const [theme, setTheme] = useState<Theme>("dark");
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +71,21 @@ export function HistoricalQuoteExtractor() {
     visibleHits.length > 0 ||
     job?.status === "completed" ||
     job?.status === "capped";
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("bibliographer-theme");
+    if (isTheme(storedTheme)) {
+      document.documentElement.dataset.theme = storedTheme;
+      const syncStoredTheme = window.setTimeout(() => setTheme(storedTheme), 0);
+      return () => window.clearTimeout(syncStoredTheme);
+    }
+  }, []);
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("bibliographer-theme", nextTheme);
+  }
 
   useEffect(() => {
     if (
@@ -249,7 +269,7 @@ export function HistoricalQuoteExtractor() {
         <header className="mb-8 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="badge badge-outline">Local Codex worker</div>
-            <ThemeSwitcher />
+            <ThemeSwitcher theme={theme} onChange={changeTheme} />
           </div>
           <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
             YouTube Video Bibliographer
@@ -258,7 +278,7 @@ export function HistoricalQuoteExtractor() {
             Build a compact, source-grounded reading list from meaningful
             multi-word phrases in a YouTube transcript.
           </p>
-          <ProcessFlowDiagram />
+          <ProcessFlowDiagram theme={theme} />
         </header>
 
         <form

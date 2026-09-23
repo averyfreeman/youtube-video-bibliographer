@@ -352,11 +352,65 @@ test("defaults to dark mode and persists a light-mode choice", async ({
 
   await expect(page.getByLabel("Color mode")).toHaveValue("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const diagram = page.getByLabel("Bibliography processing flowchart");
+  await expect(diagram.locator("svg")).toBeVisible();
+  await expect(
+    diagram.locator("text").filter({ hasText: "limit" }).first(),
+  ).toBeVisible();
+  const darkConnector = await diagram
+    .locator("path.flowchart-link")
+    .first()
+    .evaluate((element) => ({
+      stroke: getComputedStyle(element).stroke,
+      width: element.getBoundingClientRect().width,
+    }));
+  expect(darkConnector.stroke).toBe("rgb(244, 247, 251)");
+  expect(darkConnector.width).toBeGreaterThan(0);
+  const darkEdgeLabel = await diagram
+    .locator("g.edgeLabel text")
+    .first()
+    .evaluate((element) => getComputedStyle(element).fill);
+  expect(darkEdgeLabel).toBe("rgb(244, 247, 251)");
 
   await page.getByLabel("Color mode").selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(diagram.locator("svg")).toBeVisible();
+  await expect
+    .poll(async () =>
+      diagram
+        .locator("path.flowchart-link")
+        .first()
+        .evaluate((element) => getComputedStyle(element).stroke),
+    )
+    .toBe("rgb(24, 33, 44)");
+  await expect(
+    diagram.locator("text").filter({ hasText: "limit" }).first(),
+  ).toBeVisible();
+  const lightConnector = await diagram
+    .locator("path.flowchart-link")
+    .first()
+    .evaluate((element) => ({
+      stroke: getComputedStyle(element).stroke,
+      width: element.getBoundingClientRect().width,
+    }));
+  expect(lightConnector.stroke).toBe("rgb(24, 33, 44)");
+  expect(lightConnector.width).toBeGreaterThan(0);
+  const lightEdgeLabel = await diagram
+    .locator("g.edgeLabel text")
+    .first()
+    .evaluate((element) => getComputedStyle(element).fill);
+  expect(lightEdgeLabel).toBe("rgb(24, 33, 44)");
 
   await page.reload();
   await expect(page.getByLabel("Color mode")).toHaveValue("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const reloadedDiagram = page.getByLabel("Bibliography processing flowchart");
+  await expect
+    .poll(async () =>
+      reloadedDiagram
+        .locator("path.flowchart-link")
+        .first()
+        .evaluate((element) => getComputedStyle(element).stroke),
+    )
+    .toBe("rgb(24, 33, 44)");
 });

@@ -35,6 +35,7 @@ import {
   parseTimestampStart,
   type NormalizedTranscriptSegment,
 } from "../../lib/youtube-transcript.ts";
+import { getProcessDiagramConfig } from "../../lib/process-diagram.ts";
 import { storyboardTileForTimestamp } from "../../lib/storyboard.ts";
 
 function segment(
@@ -179,6 +180,24 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
   assert.equal(config.processing.chunkCharacters, 80_000);
   assert.equal(config.processing.maxHits, 40);
   assert.equal(config.processing.maxRuntimeSeconds, 600);
+});
+
+test("uses contrasting Mermaid palettes for dark and light themes", () => {
+  const dark = getProcessDiagramConfig("dark");
+  const light = getProcessDiagramConfig("light");
+
+  assert.equal(dark.theme, "base");
+  assert.equal(light.theme, "base");
+  assert.equal(dark.themeVariables?.lineColor, "#f4f7fb");
+  assert.equal(dark.themeVariables?.edgeLabelBackground, "#2c3644");
+  assert.match(dark.themeCSS ?? "", /#f4f7fb/);
+  assert.equal(light.themeVariables?.lineColor, "#18212c");
+  assert.equal(light.themeVariables?.edgeLabelBackground, "#ffffff");
+  assert.match(light.themeCSS ?? "", /#18212c/);
+  assert.notEqual(
+    dark.themeVariables?.lineColor,
+    light.themeVariables?.lineColor,
+  );
 });
 
 test("parses a continuation timestamp and filters earlier captions", () => {

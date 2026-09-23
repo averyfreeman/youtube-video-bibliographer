@@ -3,14 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  getProcessDiagramConfig,
   processDiagramSource,
   processDiagramText,
+  type ProcessDiagramTheme,
 } from "@/lib/process-diagram";
 
 let renderSequence = 0;
 
-export function ProcessFlowDiagram() {
+export function ProcessFlowDiagram({ theme }: { theme: ProcessDiagramTheme }) {
   const diagramRef = useRef<HTMLDivElement>(null);
+  const hasRenderedRef = useRef(false);
   const [renderFailed, setRenderFailed] = useState(false);
 
   useEffect(() => {
@@ -22,24 +25,27 @@ export function ProcessFlowDiagram() {
 
     void import("mermaid")
       .then(async ({ default: mermaid }) => {
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          theme: "base",
-          flowchart: { useMaxWidth: true, htmlLabels: false },
-        });
+        if (!mounted) {
+          return;
+        }
+
+        mermaid.initialize(getProcessDiagramConfig(theme));
         return mermaid.render(
           `bibliographer-flow-${renderSequence++}`,
           processDiagramSource,
         );
       })
-      .then(({ svg }) => {
-        if (mounted && diagramRef.current) {
-          diagramRef.current.innerHTML = svg;
+      .then((result) => {
+        if (!result || !mounted || !diagramRef.current) {
+          return;
         }
+
+        diagramRef.current.innerHTML = result.svg;
+        hasRenderedRef.current = true;
+        setRenderFailed(false);
       })
       .catch(() => {
-        if (mounted) {
+        if (mounted && !hasRenderedRef.current) {
           setRenderFailed(true);
         }
       });
@@ -47,7 +53,7 @@ export function ProcessFlowDiagram() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [theme]);
 
   return (
     <figure className="card card-border mb-8 bg-base-200/50">
