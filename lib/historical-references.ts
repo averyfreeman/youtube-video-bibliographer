@@ -47,11 +47,15 @@ export const sourceQualitySchema = z.enum(sourceQualities);
 export const confidenceSchema = z.enum(confidenceLevels);
 export const verificationStatusSchema = z.enum(verificationStatuses);
 
+export const videoOverviewDateKinds = ["uploaded", "published"] as const;
+export const videoOverviewDateKindSchema = z.enum(videoOverviewDateKinds);
+
 export type ReferenceCategory = z.infer<typeof referenceCategorySchema>;
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>;
 export type SourceQuality = z.infer<typeof sourceQualitySchema>;
 export type Confidence = z.infer<typeof confidenceSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
+export type VideoOverviewDateKind = z.infer<typeof videoOverviewDateKindSchema>;
 
 const youtubeUrlSchema = z
   .string()
@@ -86,6 +90,20 @@ const baseReferenceSchema = z.object({
   videoEvidence: z.string().trim().min(1).max(2_000),
 });
 
+export const videoOverviewSchema = z
+  .object({
+    title: z.string().trim().min(1).max(240).nullable(),
+    channel: z.string().trim().min(1).max(240).nullable(),
+    date: z.string().trim().min(1).max(40).nullable(),
+    dateKind: videoOverviewDateKindSchema.nullable(),
+    people: z.array(z.string().trim().min(1).max(200)).max(8),
+    theme: z.string().trim().min(1).max(500).nullable(),
+    summary: z.string().trim().min(1).max(1_200).nullable(),
+  })
+  .strict();
+
+export type VideoOverview = z.infer<typeof videoOverviewSchema>;
+
 export const historicalCandidateSchema = baseReferenceSchema.strict();
 
 export const historicalCandidatesSchema = z
@@ -110,6 +128,7 @@ export type HistoricalSource = z.infer<typeof historicalSourceSchema>;
 
 export const historicalReferenceSchema = baseReferenceSchema
   .extend({
+    speaker: z.string().trim().min(1).max(200).nullable().default(null),
     confidence: confidenceSchema,
     confidenceReasons: z.array(z.string().trim().min(1).max(300)).min(1).max(4),
     verificationStatus: verificationStatusSchema,
@@ -118,6 +137,11 @@ export const historicalReferenceSchema = baseReferenceSchema
       .array(z.string().trim().min(1).max(4_000))
       .min(1)
       .max(2),
+    discussionContextParagraphs: z
+      .array(z.string().trim().min(1).max(1_200))
+      .min(1)
+      .max(2)
+      .default(["Discussion context was not available for this run."]),
     sources: z.array(historicalSourceSchema).max(3),
   })
   .strict();
@@ -147,6 +171,7 @@ export const historicalReferencesResponseSchema = z
     transcriptLanguage: z.string().nullable(),
     transcriptTruncated: z.boolean(),
     warnings: z.array(z.string()),
+    videoOverview: videoOverviewSchema.nullable(),
     hits: z.array(historicalReferenceSchema),
     markdown: z.string().min(1),
   })

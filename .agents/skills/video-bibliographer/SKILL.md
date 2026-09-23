@@ -21,7 +21,7 @@ Build a compact, auditable bibliography from a spoken-video transcript. The resu
 
 ## Active project contract
 
-The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with `medium` reasoning, 80,000-character chunks, a ten-minute budget, and a 40-hit maximum. User-level Codex configuration is ignored intentionally.
+The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with high-recall candidate extraction, medium synthesis/overview reasoning, 80,000-character chunks, a ten-minute budget, and a 40-hit maximum. User-level Codex configuration is ignored intentionally.
 
 Long jobs are checkpointed. A `capped` run records elapsed time, ETA, processed cursor, cap reason, and a continuation YouTube URL using `t=<seconds>s`. A continuation is a new run filtered from that timestamp; it is not a retry of the capped job.
 
@@ -36,6 +36,8 @@ Every bibliography hit contains:
 - `timestampSeconds`: the same video position as an integer.
 - `historicalDate`: a date or range when established, otherwise `null`.
 - `videoEvidence`: a faithful short excerpt or paraphrase grounded in the transcript.
+- `speaker`: an explicitly supported person or role, otherwise `null`.
+- `discussionContextParagraphs`: one or two short paragraphs describing what the participants were discussing around the timestamp.
 - `confidence`: `high`, `medium`, or `low`.
 - `confidenceReasons`: one to four concrete reasons.
 - `verificationStatus`: `verified`, `needs_review`, or `unavailable`.
@@ -43,8 +45,10 @@ Every bibliography hit contains:
 - `analysisParagraphs`: one or two concise historical-context paragraphs.
 - `sources`: zero to three source records with `title`, `url`, `quality`, and nullable `note`.
 
+The result may also include a `videoOverview` preamble with title, channel, upload/publication date, people, theme, and summary. Metadata and orientation are best effort; use null or an empty list when the evidence does not establish a field.
+
 When no trustworthy source can be established, use `verificationStatus: "unavailable"`, `sources: []`, and explain the limitation. Never invent a URL, quotation, date, speaker, publication, or attribution.
 
 ## Presentation rules
 
-Return items in video-timestamp order. Preserve linked timestamps when the output format supports Markdown or HTML. Keep the raw `HH:MM:SS` value available for machine consumers. Return no conversational padding and no glossary section.
+Return items in video-timestamp order. Preserve linked timestamps when the output format supports Markdown or HTML. Keep the raw `HH:MM:SS` value available for machine consumers. Keep discussion context separate from historical analysis. Return no conversational padding and no glossary section.

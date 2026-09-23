@@ -6,7 +6,7 @@ export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 8;
 export const DEFAULT_MAX_HITS = 40;
 export const DEFAULT_MAX_RUNTIME_SECONDS = 10 * 60;
 
-export type CodexReasoningEffort = "medium" | "high" | "max";
+export type CodexReasoningEffort = "medium" | "high" | "xhigh" | "max";
 
 export type BibliographerConfig = {
   configPath: string;
@@ -14,6 +14,9 @@ export type BibliographerConfig = {
   prompt: string;
   processing: {
     reasoningEffort: CodexReasoningEffort;
+    candidateReasoningEffort: CodexReasoningEffort;
+    synthesisReasoningEffort: CodexReasoningEffort;
+    overviewReasoningEffort: CodexReasoningEffort;
     chunkCharacters: number;
     candidateConcurrency: number;
     synthesisConcurrency: number;
@@ -95,9 +98,18 @@ function asBoolean(values: FlatToml, key: string, fallback: boolean) {
   return typeof values[key] === "boolean" ? values[key] : fallback;
 }
 
-function asReasoningEffort(values: FlatToml): CodexReasoningEffort {
-  const value = asString(values, "processing.reasoning_effort", "medium");
-  return value === "high" || value === "max" ? value : "medium";
+function asReasoningEffort(
+  values: FlatToml,
+  key: string,
+  fallback: CodexReasoningEffort,
+): CodexReasoningEffort {
+  const value = asString(values, key, fallback);
+  return value === "medium" ||
+    value === "high" ||
+    value === "xhigh" ||
+    value === "max"
+    ? value
+    : fallback;
 }
 
 export function buildBibliographerConfig(
@@ -106,12 +118,33 @@ export function buildBibliographerConfig(
   configPath: string,
   promptPath: string,
 ): BibliographerConfig {
+  const reasoningEffort = asReasoningEffort(
+    values,
+    "processing.reasoning_effort",
+    "medium",
+  );
+
   return {
     configPath,
     promptPath,
     prompt,
     processing: {
-      reasoningEffort: asReasoningEffort(values),
+      reasoningEffort,
+      candidateReasoningEffort: asReasoningEffort(
+        values,
+        "processing.candidate_reasoning_effort",
+        reasoningEffort,
+      ),
+      synthesisReasoningEffort: asReasoningEffort(
+        values,
+        "processing.synthesis_reasoning_effort",
+        reasoningEffort,
+      ),
+      overviewReasoningEffort: asReasoningEffort(
+        values,
+        "processing.overview_reasoning_effort",
+        reasoningEffort,
+      ),
       chunkCharacters: asPositiveInteger(
         values,
         "processing.chunk_characters",

@@ -19,6 +19,15 @@ const bibliographyResponse = {
   videoUrl,
   transcriptLanguage: "en",
   transcriptTruncated: false,
+  videoOverview: {
+    title: "Example video",
+    channel: "Example channel",
+    date: "2026-09-22",
+    dateKind: "uploaded",
+    people: ["Host", "Guest"],
+    theme: "Historical discussion",
+    summary: "A discussion of historical sources.",
+  },
   warnings: [],
   hits: [
     {
@@ -35,6 +44,10 @@ const bibliographyResponse = {
       ],
       verificationStatus: "verified",
       verificationNote: "The event and date match the primary archive.",
+      speaker: "The host",
+      discussionContextParagraphs: [
+        "The host was establishing the historical timeline before turning to later examples.",
+      ],
       analysisParagraphs: ["The first event establishes the timeline."],
       sources: [
         {
@@ -62,6 +75,10 @@ const bibliographyResponse = {
       verificationStatus: "needs_review",
       verificationNote:
         "The quote is plausible but should be checked against the original publication.",
+      speaker: "The guest",
+      discussionContextParagraphs: [
+        "The guest was connecting the quoted language to the broader historical discussion.",
+      ],
       analysisParagraphs: ["This quote is contextualized here."],
       sources: [
         {
@@ -171,6 +188,12 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0)).toContainText("00:01:02");
   await expect(cards.nth(1)).toContainText("00:04:05");
+  await expect(
+    page.getByRole("heading", { name: "About this video" }),
+  ).toBeVisible();
+  await expect(page.getByText("Host, Guest")).toBeVisible();
+  await expect(cards.nth(1)).toContainText("Speaker: The guest");
+  await expect(cards.nth(1)).toContainText("Discussion context");
   await cards.nth(1).locator("details").locator("summary").click();
   await expect(page.getByText("Verify independently.")).toBeVisible();
   await expect(page.getByLabel("Markdown bibliography")).toHaveCount(0);

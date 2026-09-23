@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["overview"],
+  "properties": {
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["people", "theme", "summary"],
+      "properties": {
+        "people": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "theme": {
+          "type": ["string", "null"],
+          "maxLength": 500
+        },
+        "summary": {
+          "type": ["string", "null"],
+          "maxLength": 1200
+        }
+      }
+    }
+  }
+}

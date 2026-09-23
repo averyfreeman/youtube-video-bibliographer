@@ -295,7 +295,8 @@ export function HistoricalQuoteExtractor() {
                 {isLoading ? "Processing video" : "Build bibliography"}
               </button>
               <span className="text-sm text-base-content/60">
-                Phrase-only · max 40 hits · ten-minute budget · medium reasoning
+                Phrase-only · max 40 hits · ten-minute budget · high-recall
+                extraction
               </span>
             </div>
 
@@ -450,6 +451,58 @@ export function HistoricalQuoteExtractor() {
               </div>
             ) : null}
 
+            {job.videoOverview ? (
+              <div className="card card-border bg-base-100 shadow-sm">
+                <div className="card-body gap-3">
+                  <h3 className="text-xl font-bold">About this video</h3>
+                  <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="font-semibold text-base-content/60">
+                        Title
+                      </dt>
+                      <dd>{job.videoOverview?.title ?? "Not established"}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-base-content/60">
+                        Channel
+                      </dt>
+                      <dd>{job.videoOverview?.channel ?? "Not established"}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-base-content/60">
+                        {job.videoOverview?.dateKind === "uploaded"
+                          ? "Uploaded"
+                          : job.videoOverview?.dateKind === "published"
+                            ? "Published"
+                            : "Date"}
+                      </dt>
+                      <dd>{job.videoOverview?.date ?? "Not established"}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-base-content/60">
+                        People
+                      </dt>
+                      <dd>
+                        {job.videoOverview?.people.length
+                          ? job.videoOverview.people.join(", ")
+                          : "Not established from the available evidence"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="font-semibold text-base-content/60">
+                        Theme
+                      </dt>
+                      <dd>{job.videoOverview?.theme ?? "Not established"}</dd>
+                    </div>
+                  </dl>
+                  <p className="max-w-4xl leading-7 text-base-content/80">
+                    {job.videoOverview?.summary ??
+                      "A concise video summary was not available for this run."}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {visibleHits.length === 0 ? (
               <div className="card card-border bg-base-100">
                 <div className="card-body">
@@ -525,16 +578,35 @@ export function HistoricalQuoteExtractor() {
                           <span>Historical date: {hit.historicalDate}</span>
                         ) : null}
                       </div>
+                      <p className="mt-2 text-sm text-base-content/70">
+                        Speaker:{" "}
+                        {hit.speaker ??
+                          "Attribution not established from captions."}
+                      </p>
                     </div>
 
                     <blockquote className="border-l-4 border-primary/40 pl-4 text-base-content/80">
                       {hit.videoEvidence}
                     </blockquote>
 
-                    <div className="bibliographer-prose leading-7 text-base-content/80">
-                      {hit.analysisParagraphs.map((paragraph) => (
+                    <div className="space-y-2 text-sm leading-6 text-base-content/75">
+                      <h4 className="font-semibold text-base-content">
+                        Discussion context
+                      </h4>
+                      {hit.discussionContextParagraphs.map((paragraph) => (
                         <p key={paragraph}>{paragraph}</p>
                       ))}
+                    </div>
+
+                    <div>
+                      <h4 className="mb-2 font-semibold">
+                        Historical analysis
+                      </h4>
+                      <div className="bibliographer-prose leading-7 text-base-content/80">
+                        {hit.analysisParagraphs.map((paragraph) => (
+                          <p key={paragraph}>{paragraph}</p>
+                        ))}
+                      </div>
                     </div>
 
                     <details className="border-t border-base-300 pt-4 text-sm">

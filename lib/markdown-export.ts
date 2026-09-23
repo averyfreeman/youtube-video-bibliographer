@@ -1,6 +1,7 @@
 import type {
   HistoricalReference,
   SourceQuality,
+  VideoOverview,
 } from "./historical-references.ts";
 
 export const exportFormats = {
@@ -22,8 +23,46 @@ export function timestampUrl(videoUrl: string, seconds: number) {
   return url.toString();
 }
 
+function overviewValue(value: string | null, fallback: string) {
+  return value ?? fallback;
+}
+
+function renderVideoOverview(overview: VideoOverview | null) {
+  if (!overview) {
+    return [
+      "## About this video",
+      "",
+      "Video orientation was not available for this run.",
+    ].join("\n");
+  }
+
+  const dateLabel = overview.dateKind
+    ? `${overview.dateKind === "uploaded" ? "Uploaded" : "Published"}: ${overviewValue(overview.date, "Not established")}`
+    : `Date: ${overviewValue(overview.date, "Not established")}`;
+  const people =
+    overview.people.length > 0
+      ? overview.people.join(", ")
+      : "Not established from the available evidence";
+
+  return [
+    "## About this video",
+    "",
+    `- Title: ${overviewValue(overview.title, "Not established")}`,
+    `- Channel: ${overviewValue(overview.channel, "Not established")}`,
+    `- ${dateLabel}`,
+    `- People: ${people}`,
+    `- Theme: ${overviewValue(overview.theme, "Not established")}`,
+    "",
+    overviewValue(
+      overview.summary,
+      "A concise video summary was not available for this run.",
+    ),
+  ].join("\n");
+}
+
 export function renderBibliographyMarkdown(
   videoUrl: string,
+  overview: VideoOverview | null,
   hits: HistoricalReference[],
 ) {
   const sections = hits.map((hit, index) => {
@@ -50,11 +89,16 @@ export function renderBibliographyMarkdown(
       `- Confidence reasons: ${hit.confidenceReasons.join("; ")}`,
       `- Verification: ${hit.verificationStatus}`,
       `- Verification note: ${hit.verificationNote}`,
+      `- Speaker: ${hit.speaker ?? "Attribution not established from captions"}`,
       `- Video timestamp: [${hit.timestamp}](${timestampUrl(videoUrl, hit.timestampSeconds)})`,
       "",
       `> ${hit.videoEvidence}`,
       "",
-      "### Analysis",
+      "### Discussion context",
+      "",
+      ...hit.discussionContextParagraphs,
+      "",
+      "### Historical analysis",
       "",
       ...hit.analysisParagraphs,
       "",
@@ -70,6 +114,8 @@ export function renderBibliographyMarkdown(
     "",
     `Source video: [${videoUrl}](${videoUrl})`,
     "",
+    renderVideoOverview(overview),
+    "",
     "The hits below follow the order in which the historical references appear in the video.",
     "",
     sections.length > 0
@@ -82,10 +128,11 @@ export function renderBibliographyMarkdown(
 export function renderExport(
   format: ExportFormat,
   videoUrl: string,
+  overview: VideoOverview | null,
   hits: HistoricalReference[],
 ) {
   if (format === "md") {
-    return renderBibliographyMarkdown(videoUrl, hits);
+    return renderBibliographyMarkdown(videoUrl, overview, hits);
   }
 
   const exhaustiveFormatCheck: never = format;

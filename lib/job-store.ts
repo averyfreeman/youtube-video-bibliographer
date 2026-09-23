@@ -96,6 +96,7 @@ export class JobStore {
       videoUrl,
       transcriptLanguage: null,
       transcriptTruncated: false,
+      videoOverview: null,
       warnings: [],
       hits: [],
       markdown: null,
@@ -123,6 +124,7 @@ export class JobStore {
       maxRuntimeSeconds:
         options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
       thumbnailPaths: {},
+      videoMetadata: null,
     });
 
     await this.ensureRoot();
@@ -204,6 +206,7 @@ export class JobStore {
       videoUrl: record.videoUrl,
       transcriptLanguage: record.transcriptLanguage,
       transcriptTruncated: record.transcriptTruncated,
+      videoOverview: record.videoOverview,
       warnings: record.warnings,
       hits: record.hits.map((hit, index) => ({
         ...hit,

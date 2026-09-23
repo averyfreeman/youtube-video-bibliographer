@@ -9,6 +9,8 @@ import {
   buildBibliographerConfig,
   parseBibliographerToml,
 } from "../../lib/bibliographer-config.ts";
+import { buildVideoOverview } from "../../lib/video-overview.ts";
+import { parseYouTubeMetadata } from "../../lib/youtube-metadata.ts";
 import {
   historicalReferencesSchema,
   isWeakSource,
@@ -33,6 +35,7 @@ import {
   filterTranscriptFromTimestamp,
   formatTimestamp,
   parseTimestampStart,
+  transcriptContextForTimestamp,
   type NormalizedTranscriptSegment,
 } from "../../lib/youtube-transcript.ts";
 import { getProcessDiagramConfig } from "../../lib/process-diagram.ts";
@@ -136,6 +139,49 @@ test("keeps only meaningful multi-word phrases and rejects introductions", () =>
   );
 });
 
+test("parses metadata into a reader-facing video overview", () => {
+  const metadata = parseYouTubeMetadata({
+    title: "A video title",
+    channel: "A channel",
+    upload_date: "20260922",
+    timestamp: 1_758_528_000,
+    description: "A short description.",
+  });
+  const overview = buildVideoOverview(metadata, {
+    people: ["Host", "Guest"],
+    theme: "Historical discussion",
+    summary: "A concise orientation.",
+  });
+
+  assert.equal(overview.title, "A video title");
+  assert.equal(overview.date, "2026-09-22");
+  assert.equal(overview.dateKind, "uploaded");
+  assert.deepEqual(overview.people, ["Host", "Guest"]);
+});
+
+test("limits discussion context to the timestamp window", () => {
+  const result = transcriptContextForTimestamp(
+    [
+      segment(0, "outside before"),
+      segment(20, "inside context"),
+      segment(100, "outside after"),
+    ],
+    20,
+    5,
+  );
+
+  assert.match(result, /inside context/);
+  assert.doesNotMatch(result, /outside before/);
+  assert.doesNotMatch(result, /outside after/);
+});
+
+test("keeps the overview fallback factual when evidence is unavailable", () => {
+  const overview = buildVideoOverview(null, null);
+  assert.equal(overview.title, null);
+  assert.deepEqual(overview.people, []);
+  assert.equal(overview.summary, null);
+});
+
 test("deduplicates phrases globally before verification", () => {
   const base = {
     category: "event" as const,
@@ -167,6 +213,9 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
     file = "DEFAULT_PROMPT.md"
     [processing]
     reasoning_effort = "medium"
+    candidate_reasoning_effort = "high"
+    synthesis_reasoning_effort = "medium"
+    overview_reasoning_effort = "xhigh"
     max_hits = 40
     max_runtime_minutes = 10
   `);
@@ -177,6 +226,9 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
     "/tmp/DEFAULT_PROMPT.md",
   );
   assert.equal(config.processing.reasoningEffort, "medium");
+  assert.equal(config.processing.candidateReasoningEffort, "high");
+  assert.equal(config.processing.synthesisReasoningEffort, "medium");
+  assert.equal(config.processing.overviewReasoningEffort, "xhigh");
   assert.equal(config.processing.chunkCharacters, 80_000);
   assert.equal(config.processing.maxHits, 40);
   assert.equal(config.processing.maxRuntimeSeconds, 600);
@@ -262,6 +314,10 @@ test("renders ordered Markdown and labels weak sources", () => {
     verificationStatus: "needs_review" as const,
     verificationNote:
       "The secondary source should be checked against a primary record.",
+    speaker: "The guest",
+    discussionContextParagraphs: [
+      "The guest was connecting the quote to a broader discussion of political change.",
+    ],
     analysisParagraphs: ["The quote matters in context."],
     sources: [
       {
@@ -275,11 +331,24 @@ test("renders ordered Markdown and labels weak sources", () => {
 
   const markdown = renderBibliographyMarkdown(
     "https://www.youtube.com/watch?v=example123",
+    {
+      title: "Example video",
+      channel: "Example channel",
+      date: "2026-09-22",
+      dateKind: "uploaded",
+      people: ["The host", "The guest"],
+      theme: "Historical interpretation",
+      summary: "A discussion of historical sources.",
+    },
     [hit],
   );
 
   assert.match(markdown, /00:02:03/);
   assert.match(markdown, /verify independently/);
+  assert.match(markdown, /## About this video/);
+  assert.match(markdown, /### Discussion context/);
+  assert.match(markdown, /### Historical analysis/);
+  assert.match(markdown, /Speaker: The guest/);
   assert.equal(isWeakSource(hit.sources[0]), true);
 });
 

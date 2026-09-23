@@ -4,7 +4,9 @@ import {
   historicalCandidateSchema,
   historicalReferenceSchema,
   presentationHistoricalReferenceSchema,
+  videoOverviewSchema,
 } from "./historical-references.ts";
+import { youtubeMetadataSchema } from "./youtube-metadata-schema.ts";
 
 export const jobStatuses = [
   "queued",
@@ -67,6 +69,7 @@ export const jobSnapshotSchema = z
     videoUrl: z.string().url(),
     transcriptLanguage: z.string().nullable(),
     transcriptTruncated: z.boolean(),
+    videoOverview: videoOverviewSchema.nullable().default(null),
     warnings: z.array(z.string()),
     hits: z.array(presentationHistoricalReferenceSchema),
     markdown: z.string().nullable(),
@@ -113,6 +116,7 @@ export const persistedJobSchema = jobSnapshotSchema
     ]),
     maxRuntimeSeconds: z.number().int().positive(),
     thumbnailPaths: z.record(z.string(), z.string()),
+    videoMetadata: youtubeMetadataSchema.nullable().default(null),
   })
   .strict();
 

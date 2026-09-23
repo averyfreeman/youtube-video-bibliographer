@@ -49,6 +49,7 @@ function synthesisPrompt(
   return `${prompt}
 
 Benchmark the compact synthesis contract. Deduplicate the supplied candidates, keep only their supplied titles, and return a concise JSON result with no more than 40 hits. Do not use web search for this local benchmark and do not add a new title.
+For each retained hit, set speaker to null when the local benchmark does not establish attribution and provide one concise discussionContextParagraph based on the supplied evidence. Keep analysisParagraphs focused on historical significance.
 
 Source video: ${videoUrl}
 SUPPLIED CANDIDATES
@@ -163,6 +164,10 @@ async function main() {
     sameTranscript: true,
     config: {
       chunkCharacters: config.processing.chunkCharacters,
+      reasoningEffort: config.processing.reasoningEffort,
+      candidateReasoningEffort: config.processing.candidateReasoningEffort,
+      synthesisReasoningEffort: config.processing.synthesisReasoningEffort,
+      overviewReasoningEffort: config.processing.overviewReasoningEffort,
       maxHits: config.processing.maxHits,
       maxRuntimeSeconds: config.processing.maxRuntimeSeconds,
     },

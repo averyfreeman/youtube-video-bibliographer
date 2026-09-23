@@ -6,6 +6,9 @@ file = "DEFAULT_PROMPT.md"
 
 [processing]
 reasoning_effort = "medium"
+candidate_reasoning_effort = "high"
+synthesis_reasoning_effort = "medium"
+overview_reasoning_effort = "medium"
 chunk_characters = 80000
 candidate_concurrency = 2
 synthesis_concurrency = 1

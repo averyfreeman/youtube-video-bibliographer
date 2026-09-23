@@ -42,6 +42,9 @@ export type TranscriptChunks = {
   truncated: false;
 };
 
+export const TRANSCRIPT_CONTEXT_RADIUS_SECONDS = 90;
+export const TRANSCRIPT_CONTEXT_MAX_CHARACTERS = 4_000;
+
 function parseTimeParameter(value: string) {
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) {
@@ -78,6 +81,32 @@ export function filterTranscriptFromTimestamp(
 ) {
   const start = Math.max(0, Math.floor(startSeconds));
   return segments.filter((segment) => segment.timestampSeconds >= start);
+}
+
+export function transcriptContextForTimestamp(
+  segments: NormalizedTranscriptSegment[],
+  timestampSeconds: number,
+  radiusSeconds = TRANSCRIPT_CONTEXT_RADIUS_SECONDS,
+  maxCharacters = TRANSCRIPT_CONTEXT_MAX_CHARACTERS,
+) {
+  const start = Math.max(0, timestampSeconds - radiusSeconds);
+  const end = timestampSeconds + radiusSeconds;
+  const text = segments
+    .filter(
+      (segment) =>
+        segment.timestampSeconds >= start && segment.timestampSeconds <= end,
+    )
+    .map((segment) => segment.line)
+    .join("\n");
+
+  if (text.length <= maxCharacters) {
+    return text;
+  }
+
+  const half = Math.floor(maxCharacters / 2);
+  return (
+    text.slice(0, half) + "\n[...context omitted...]\n" + text.slice(-half)
+  );
 }
 
 export function formatTimestamp(offsetMilliseconds: number) {
