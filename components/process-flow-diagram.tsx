@@ -2,19 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useAppTheme } from "@/lib/theme";
 import {
   getProcessDiagramConfig,
   processDiagramSource,
   processDiagramText,
-  type ProcessDiagramTheme,
 } from "@/lib/process-diagram";
 
 let renderSequence = 0;
 
-export function ProcessFlowDiagram({ theme }: { theme: ProcessDiagramTheme }) {
+export function ProcessFlowDiagram() {
   const diagramRef = useRef<HTMLDivElement>(null);
   const hasRenderedRef = useRef(false);
   const [renderFailed, setRenderFailed] = useState(false);
+  const theme = useAppTheme();
 
   useEffect(() => {
     let mounted = true;

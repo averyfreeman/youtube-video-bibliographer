@@ -1,19 +1,12 @@
 "use client";
 
+import { setAppTheme, useAppTheme, type Theme } from "@/lib/theme";
+
 const themes = ["dark", "light"] as const;
-export type Theme = (typeof themes)[number];
 
-export function isTheme(value: string | null): value is Theme {
-  return value === "dark" || value === "light";
-}
+export function ThemeSwitcher() {
+  const theme = useAppTheme();
 
-export function ThemeSwitcher({
-  theme,
-  onChange,
-}: {
-  theme: Theme;
-  onChange: (theme: Theme) => void;
-}) {
   return (
     <label className="flex items-center gap-2 text-sm text-base-content/70">
       <span>Color mode</span>
@@ -21,7 +14,12 @@ export function ThemeSwitcher({
         className="select select-sm w-28"
         aria-label="Color mode"
         value={theme}
-        onChange={(event) => onChange(event.target.value as Theme)}
+        onChange={(event) => {
+          const nextTheme = event.target.value;
+          if (nextTheme === "dark" || nextTheme === "light") {
+            setAppTheme(nextTheme as Theme);
+          }
+        }}
       >
         {themes.map((option) => (
           <option key={option} value={option}>
