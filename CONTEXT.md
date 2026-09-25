@@ -9,14 +9,14 @@ This file is the domain glossary. Runtime architecture and acceptance procedures
 - **Transcript segment**: One caption line with source offset, duration, normalized text, and an `HH:MM:SS` timestamp.
 - **Transcript chunk**: An overlapping prompt-sized window. Chunking limits one Codex call, not the retrieved transcript; a continuation job applies a timestamp cursor first.
 - **Candidate**: A possible phrase returned by extraction before global deduplication and source verification.
-- **Hit**: A deduplicated, source-grounded phrase shown in the results. A run returns at most 40 hits. Each hit may include explicit attribution and a short discussion context.
+- **Hit**: A deduplicated, source-grounded phrase shown in the results. A run usually returns at most 40 hits, with a hard ceiling of 52 available during the final five minutes of the transcript. Each hit may include explicit attribution and a short discussion context.
 - **Speaker attribution**: A person or role explicitly supported by the YouTube description. It is `null` when the description does not establish the speaker; nearby captions are never used to infer it.
 - **Discussion context**: Zero or one optional short paragraph describing what the participants were discussing near a hit timestamp. It is generated after historical verification and is distinct from historical analysis.
 - **Video overview**: A best-effort preamble containing title, channel, upload/publication date, people, theme, and summary. New runs use `yt-dlp` metadata and the YouTube description only, with at most four primary participants.
 - **Cursor**: The integer video second at which a capped run stopped. Continuation URLs use YouTube's `t=<seconds>s` query.
 - **Storyboard tile**: A UI-only 320×180 crop from a YouTube storyboard sprite sheet, linked to a hit timestamp.
 - **Bibliography job**: A persisted asynchronous run identified by UUID. Its transcript, extraction checkpoints, timing, cap state, thumbnails, and Markdown are recoverable locally.
-- **Cap reason**: `time` for the ten-minute processing budget or `hits` for the 40-hit safety limit.
+- **Cap reason**: `time` for the ten-minute processing budget or `hits` for the configured reference limit. The hit policy is persisted with each job for retry and continuation stability.
 - **Checkpoint**: A durable boundary: `created`, `transcript`, `candidates`, `synthesis`, or `complete`.
 
 ## Domain invariants

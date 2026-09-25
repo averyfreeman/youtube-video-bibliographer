@@ -60,6 +60,20 @@ export const MAX_SYNTHESIS_REDUCTION_LEVELS = 0;
 export const CODEX_OVERVIEW_TIMEOUT_MS = 90_000;
 export const CODEX_CONTEXT_TIMEOUT_MS = 90_000;
 
+export function effectiveHitLimit(
+  processedUntilSeconds: number,
+  transcriptEndSeconds: number,
+  softMaxHits: number,
+  hardMaxHits: number,
+  tailGraceSeconds: number,
+) {
+  const remainingSeconds = Math.max(
+    0,
+    transcriptEndSeconds - processedUntilSeconds,
+  );
+  return remainingSeconds <= tailGraceSeconds ? hardMaxHits : softMaxHits;
+}
+
 class PipelineCancelledError extends Error {
   constructor() {
     super("Bibliography job cancelled.");
@@ -137,9 +151,9 @@ function safeFailureMessage(error: unknown) {
 function candidatePrompt(chunk: TranscriptChunk, config: BibliographerConfig) {
   return `${config.prompt}
 
-You are the extraction pass in a compact, source-grounded YouTube bibliography pipeline.
+You are the high-recall extraction pass in a source-grounded YouTube bibliography pipeline.
 
-Read the timestamped caption lines in this chunk. Return only high-value multi-word phrases actually supported by the spoken text: explicit quotations, named publications, historical events, financial crises, regulations, or notable executive statements. After the strongest references, include a small number of secondary but clearly distinct references with real further-reading value. Exclude single-word concepts, host or guest introductions, greetings, show metadata, sponsor language, generic restatements, and ordinary transitions. Do not return a glossary. Do not invent a reference because a word resembles a famous name.
+Read the entire timestamped caption window before selecting candidates. Return every distinct, defensible multi-word phrase actually supported by the spoken text: explicit quotations, named publications, historical events, financial crises, regulations, notable executive statements, and current or recent public statements or events. Include fleeting references when they identify a useful subject, but exclude single-word concepts, host or guest introductions, greetings, show metadata, sponsor language, generic restatements, and ordinary transitions. Do not return a glossary. Do not invent a reference because a word resembles a famous name.
 
 Return at most ${config.processing.maxCandidatesPerChunk} candidates. Preserve whether the speaker directly quotes, paraphrases, or generally references the subject, and preserve the exact timestamp and short video evidence. An empty candidates array is correct.
 
@@ -205,19 +219,20 @@ function synthesisPrompt(
   references: Array<HistoricalCandidate | HistoricalReference>,
   finalPass: boolean,
   config: BibliographerConfig,
+  hitLimit = config.processing.maxHits,
 ) {
   const sourceInstruction = finalPass
-    ? "Use web search only to verify the supplied shortlist. Prefer primary sources such as original speeches, legislation, court opinions, official records, archival material, or the original publication."
+    ? "Use web search only to verify the supplied shortlist. Prefer primary sources such as original speeches, legislation, court opinions, official records, archival material, official statements, contemporaneous reporting, or the original publication. Current and recent references are valid; do not reject them merely because they are contemporary."
     : "Use the evidence and sources already present, but do not add a source you cannot identify confidently.";
   return `${config.prompt}
 
-You are the ${finalPass ? "final verification" : "intermediate curation"} pass for a compact YouTube video bibliography.
+You are the ${finalPass ? "final verification" : "intermediate curation"} pass for a thorough but bounded YouTube video bibliography.
 
 Source video: ${videoUrl}
 
 Deduplicate overlapping supplied items globally and keep the strongest multi-word phrase for each historical subject. Keep timestamps in video order. A hit must be supported by the supplied transcript evidence. ${sourceInstruction}
 
-Verification is not an extraction pass: never add a new hit, invent a title, broaden a title, or create a reference that is absent from the supplied candidates. Return one result for every supplied candidate after exact deduplication. If a source is uncertain, retain the candidate with needs_review or unavailable rather than silently dropping it. Return no more than ${config.processing.maxHits} hits. Preserve a faithful short excerpt or paraphrase. Use verificationStatus=verified only when identity and supporting source are established; use needs_review when ambiguity or source quality remains; use unavailable when no trustworthy source can be found, with sources=[]. Never fabricate a URL, quote, date, speaker, or publication. Keep analysis concise. Do not infer speaker attribution or discussion context in this pass; those are optional post-verification enrichment fields.
+Verification is not an extraction pass: never add a new hit, invent a title, broaden a title, or create a reference that is absent from the supplied candidates. Return one result for every supplied candidate after exact deduplication. If a source is uncertain, retain the candidate with needs_review or unavailable rather than silently dropping it. Return no more than ${hitLimit} hits. Preserve a faithful short excerpt or paraphrase, beginning with the actual spoken quote or reference rather than meta-language such as “the speaker mentions.” Use verificationStatus=verified only when identity and supporting source are established; use needs_review when ambiguity or source quality remains; use unavailable when no trustworthy source can be found, with sources=[]. Never fabricate a URL, quote, date, speaker, or publication. Keep analysis concise. Do not infer speaker attribution or discussion context in this pass; those are optional post-verification enrichment fields.
 
 Return only the JSON object required by the supplied schema. Do not include markdown outside the JSON object.
 
@@ -350,11 +365,12 @@ async function synthesizeReferences(
   finalPass: boolean,
   config: BibliographerConfig,
   signal: AbortSignal,
+  hitLimit = config.processing.maxHits,
 ) {
   return runJsonWithRetry(
-    synthesisPrompt(videoUrl, references, finalPass, config),
+    synthesisPrompt(videoUrl, references, finalPass, config, hitLimit),
     finalSchemaPath,
-    (value) => parseReferences(value, config.processing.maxHits),
+    (value) => parseReferences(value, hitLimit),
     Math.min(CODEX_FINAL_TIMEOUT_MS, 180_000),
     signal,
     config.processing.synthesisReasoningEffort,
@@ -605,6 +621,7 @@ export async function executeBibliographyJob(
   );
   const executionSignal = AbortSignal.any([signal, budgetController.signal]);
   let capReason: CapReason | null = null;
+  let transcriptEndSeconds = startSeconds;
   let preparePresentation: (
     hits: HistoricalReference[],
     reason: CapReason | null,
@@ -624,10 +641,14 @@ export async function executeBibliographyJob(
     reason: CapReason | null,
   ) => {
     const preparedHits = await preparePresentation(hits, reason);
-    const finalHits = deduplicateHits(preparedHits).slice(
-      0,
-      config.processing.maxHits,
+    const finalHitLimit = effectiveHitLimit(
+      record.processedUntilSeconds,
+      transcriptEndSeconds,
+      record.softMaxHits,
+      record.maxHits,
+      record.tailGraceSeconds,
     );
+    const finalHits = deduplicateHits(preparedHits).slice(0, finalHitLimit);
     let thumbnailPaths = record.thumbnailPaths;
     let thumbnailWarnings: string[] = [];
 
@@ -701,7 +722,9 @@ export async function executeBibliographyJob(
       capReason: null,
       resumeFromSeconds: null,
       resumeUrl: null,
-      maxHits: config.processing.maxHits,
+      softMaxHits: record.softMaxHits,
+      maxHits: record.maxHits,
+      tailGraceSeconds: record.tailGraceSeconds,
       maxRuntimeSeconds: config.processing.maxRuntimeSeconds,
       warnings: addWarnings(record.warnings, config.warnings),
     });
@@ -823,6 +846,10 @@ export async function executeBibliographyJob(
       filteredSegments,
       config.processing.chunkCharacters,
     ).chunks;
+    transcriptEndSeconds = Math.max(
+      startSeconds,
+      chunks.at(-1)?.segments.at(-1)?.timestampSeconds ?? startSeconds,
+    );
     const chunkPlanChanged =
       record.chunkCharacters !== config.processing.chunkCharacters ||
       record.processingStartSeconds !== startSeconds;
@@ -947,8 +974,15 @@ export async function executeBibliographyJob(
       const candidateCount = deduplicateCandidates(
         Object.values(record.candidatesByChunk).flat(),
       ).length;
+      const hitLimit = effectiveHitLimit(
+        record.processedUntilSeconds,
+        transcriptEndSeconds,
+        record.softMaxHits,
+        record.maxHits,
+        record.tailGraceSeconds,
+      );
       if (
-        candidateCount >= config.processing.maxHits &&
+        candidateCount >= hitLimit &&
         index + batch.length < pendingChunks.length
       ) {
         capReason = "hits";
@@ -984,8 +1018,15 @@ export async function executeBibliographyJob(
 
     let synthesizedHits: HistoricalReference[] = [];
     if (!capReason || capReason === "hits") {
+      const synthesisHitLimit = effectiveHitLimit(
+        record.processedUntilSeconds,
+        transcriptEndSeconds,
+        record.softMaxHits,
+        record.maxHits,
+        record.tailGraceSeconds,
+      );
       const candidateGroups = groupItems(
-        candidates.slice(0, config.processing.maxHits),
+        candidates.slice(0, synthesisHitLimit),
         SYNTHESIS_GROUP_SIZE,
       );
       await update({
@@ -1014,6 +1055,7 @@ export async function executeBibliographyJob(
               false,
               config,
               executionSignal,
+              synthesisHitLimit,
             );
             const suppliedHits = preserveSuppliedCandidates(items, hits);
             await update((current) => {
@@ -1051,7 +1093,7 @@ export async function executeBibliographyJob(
           Object.entries(record.synthesisByGroup)
             .filter(([key]) => key.startsWith("leaf:"))
             .flatMap(([, hits]) => hits),
-        ).slice(0, config.processing.maxHits);
+        ).slice(0, synthesisHitLimit);
 
         if (leafHits.length > 0) {
           throwIfStopped();
@@ -1061,10 +1103,11 @@ export async function executeBibliographyJob(
             true,
             config,
             executionSignal,
+            synthesisHitLimit,
           );
           synthesizedHits = preserveSuppliedHits(leafHits, verified).slice(
             0,
-            config.processing.maxHits,
+            synthesisHitLimit,
           );
           await update((current) => ({
             synthesisByGroup: {

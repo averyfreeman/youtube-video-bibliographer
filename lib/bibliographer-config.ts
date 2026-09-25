@@ -1,11 +1,16 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export const DEFAULT_CHUNK_CHARACTERS = 80_000;
-export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 8;
-export const DEFAULT_MAX_HITS = 40;
+import {
+  DEFAULT_SOFT_MAX_HITS,
+  DEFAULT_TAIL_GRACE_SECONDS,
+} from "./job-policy.ts";
+
+export const DEFAULT_CHUNK_CHARACTERS = 12_000;
+export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 16;
+export const DEFAULT_MAX_HITS = 52;
 export const DEFAULT_MAX_RUNTIME_SECONDS = 10 * 60;
-export const MAX_HITS_LIMIT = 40;
+export const MAX_HITS_LIMIT = 52;
 export const MAX_RUNTIME_SECONDS_LIMIT = 10 * 60;
 
 export type CodexReasoningEffort = "medium" | "high" | "xhigh" | "max";
@@ -24,7 +29,9 @@ export type BibliographerConfig = {
     synthesisConcurrency: number;
     verificationConcurrency: number;
     maxCandidatesPerChunk: number;
+    softMaxHits: number;
     maxHits: number;
+    tailGraceSeconds: number;
     maxRuntimeSeconds: number;
   };
   thumbnails: {
@@ -125,6 +132,18 @@ export function buildBibliographerConfig(
     "processing.reasoning_effort",
     "medium",
   );
+  const maxHits = Math.min(
+    MAX_HITS_LIMIT,
+    asPositiveInteger(values, "processing.max_hits", DEFAULT_MAX_HITS),
+  );
+  const softMaxHits = Math.min(
+    maxHits,
+    asPositiveInteger(
+      values,
+      "processing.soft_max_hits",
+      DEFAULT_SOFT_MAX_HITS,
+    ),
+  );
 
   return {
     configPath,
@@ -172,9 +191,12 @@ export function buildBibliographerConfig(
         "processing.max_candidates_per_chunk",
         DEFAULT_MAX_CANDIDATES_PER_CHUNK,
       ),
-      maxHits: Math.min(
-        MAX_HITS_LIMIT,
-        asPositiveInteger(values, "processing.max_hits", DEFAULT_MAX_HITS),
+      maxHits,
+      softMaxHits,
+      tailGraceSeconds: asPositiveInteger(
+        values,
+        "processing.tail_grace_seconds",
+        DEFAULT_TAIL_GRACE_SECONDS,
       ),
       maxRuntimeSeconds: Math.min(
         MAX_RUNTIME_SECONDS_LIMIT,

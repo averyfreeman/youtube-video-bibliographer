@@ -1,5 +1,5 @@
 # Project-owned bibliography policy. User-level Codex configuration is ignored
-# so every isolated worker receives the same compact extraction contract.
+# so every isolated worker receives the same thorough, bounded extraction contract.
 
 [prompt]
 file = "DEFAULT_PROMPT.md"
@@ -9,12 +9,14 @@ reasoning_effort = "medium"
 candidate_reasoning_effort = "high"
 synthesis_reasoning_effort = "medium"
 overview_reasoning_effort = "medium"
-chunk_characters = 80000
+chunk_characters = 12000
 candidate_concurrency = 2
 synthesis_concurrency = 1
 verification_concurrency = 1
-max_candidates_per_chunk = 8
-max_hits = 40
+max_candidates_per_chunk = 16
+soft_max_hits = 40
+max_hits = 52
+tail_grace_seconds = 300
 max_runtime_minutes = 10
 
 [thumbnails]

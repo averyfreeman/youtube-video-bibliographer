@@ -6,6 +6,10 @@ import {
   presentationHistoricalReferenceSchema,
   videoOverviewSchema,
 } from "./historical-references.ts";
+import {
+  DEFAULT_SOFT_MAX_HITS,
+  DEFAULT_TAIL_GRACE_SECONDS,
+} from "./job-policy.ts";
 import { youtubeMetadataSchema } from "./youtube-metadata-schema.ts";
 
 export const jobStatuses = [
@@ -82,6 +86,12 @@ export const jobSnapshotSchema = z
     resumeFromSeconds: z.number().int().nonnegative().nullable(),
     resumeUrl: z.string().url().nullable(),
     maxHits: z.number().int().positive(),
+    softMaxHits: z.number().int().positive().default(DEFAULT_SOFT_MAX_HITS),
+    tailGraceSeconds: z
+      .number()
+      .int()
+      .positive()
+      .default(DEFAULT_TAIL_GRACE_SECONDS),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

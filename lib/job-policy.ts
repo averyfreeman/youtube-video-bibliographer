@@ -1,0 +1,2 @@
+export const DEFAULT_SOFT_MAX_HITS = 40;
+export const DEFAULT_TAIL_GRACE_SECONDS = 5 * 60;

@@ -74,6 +74,8 @@ export async function createBibliographyJob(videoUrl: string) {
   const config = await loadBibliographerConfig();
   const record = await store.create(videoUrl, randomUUID(), {
     maxHits: config.processing.maxHits,
+    softMaxHits: config.processing.softMaxHits,
+    tailGraceSeconds: config.processing.tailGraceSeconds,
     maxRuntimeSeconds: config.processing.maxRuntimeSeconds,
   });
   startJob(record.jobId);

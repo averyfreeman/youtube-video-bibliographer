@@ -20,13 +20,17 @@ import {
   isWeakSource,
 } from "../../lib/historical-references.ts";
 import { JobStore } from "../../lib/job-store.ts";
-import { isRetryableJobStatus } from "../../lib/job-types.ts";
+import {
+  isRetryableJobStatus,
+  persistedJobSchema,
+} from "../../lib/job-types.ts";
 import {
   calculateEtaSeconds,
   isTerminalJobStatus,
 } from "../../lib/job-types.ts";
 import {
   deduplicateCandidates,
+  effectiveHitLimit,
   preserveSuppliedCandidates,
   preserveSuppliedHits,
 } from "../../lib/job-pipeline.ts";
@@ -48,6 +52,11 @@ import {
 } from "../../lib/youtube-transcript.ts";
 import { getProcessDiagramConfig } from "../../lib/process-diagram.ts";
 import { storyboardTileForTimestamp } from "../../lib/storyboard.ts";
+import {
+  briefEvidence,
+  matchConfidencePercent,
+  selectPrimarySource,
+} from "../../lib/presentation.ts";
 
 function segment(
   timestampSeconds: number,
@@ -325,7 +334,7 @@ test("deduplicates phrases globally before verification", () => {
   assert.equal(result[0]?.timestampSeconds, 60);
 });
 
-test("loads project TOML with medium reasoning and ten-minute defaults", () => {
+test("loads project TOML with thorough bounded retrieval defaults", () => {
   const values = parseBibliographerToml(`
     [prompt]
     file = "DEFAULT_PROMPT.md"
@@ -334,7 +343,7 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
     candidate_reasoning_effort = "high"
     synthesis_reasoning_effort = "medium"
     overview_reasoning_effort = "xhigh"
-    max_hits = 40
+    max_hits = 52
     max_runtime_minutes = 10
   `);
   const config = buildBibliographerConfig(
@@ -347,8 +356,11 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
   assert.equal(config.processing.candidateReasoningEffort, "high");
   assert.equal(config.processing.synthesisReasoningEffort, "medium");
   assert.equal(config.processing.overviewReasoningEffort, "xhigh");
-  assert.equal(config.processing.chunkCharacters, 80_000);
-  assert.equal(config.processing.maxHits, 40);
+  assert.equal(config.processing.chunkCharacters, 12_000);
+  assert.equal(config.processing.maxCandidatesPerChunk, 16);
+  assert.equal(config.processing.softMaxHits, 40);
+  assert.equal(config.processing.maxHits, 52);
+  assert.equal(config.processing.tailGraceSeconds, 300);
   assert.equal(config.processing.maxRuntimeSeconds, 600);
 
   const boundedConfig = buildBibliographerConfig(
@@ -361,8 +373,64 @@ test("loads project TOML with medium reasoning and ten-minute defaults", () => {
     "/tmp/bibliographer.config.toml",
     "/tmp/DEFAULT_PROMPT.md",
   );
-  assert.equal(boundedConfig.processing.maxHits, 40);
+  assert.equal(boundedConfig.processing.maxHits, 52);
+  assert.equal(boundedConfig.processing.softMaxHits, 40);
   assert.equal(boundedConfig.processing.maxRuntimeSeconds, 600);
+});
+
+test("uses the hard hit ceiling only for the transcript tail", () => {
+  assert.equal(effectiveHitLimit(0, 1_000, 40, 52, 300), 40);
+  assert.equal(effectiveHitLimit(699, 1_000, 40, 52, 300), 40);
+  assert.equal(effectiveHitLimit(700, 1_000, 40, 52, 300), 52);
+  assert.equal(effectiveHitLimit(1_000, 1_000, 40, 52, 300), 52);
+});
+
+test("builds compact evidence and deterministic source-match grades", () => {
+  assert.deepEqual(briefEvidence("The quote remains short."), {
+    text: "The quote remains short.",
+    isTruncated: false,
+  });
+  assert.deepEqual(
+    briefEvidence(
+      "The speaker references the railroad mania bubble and its later collapse.",
+    ),
+    {
+      text: "The speaker references the railroad mania bubble and its…",
+      isTruncated: true,
+    },
+  );
+
+  const sources = [
+    {
+      title: "Secondary discussion",
+      url: "https://example.com/secondary",
+      quality: "secondary" as const,
+      note: null,
+    },
+    {
+      title: "Primary archive",
+      url: "https://example.com/primary",
+      quality: "primary" as const,
+      note: null,
+    },
+  ];
+  assert.equal(selectPrimarySource(sources)?.title, "Primary archive");
+  assert.equal(
+    matchConfidencePercent({
+      confidence: "high",
+      verificationStatus: "verified",
+      sources,
+    }),
+    99.9,
+  );
+  assert.equal(
+    matchConfidencePercent({
+      confidence: "medium",
+      verificationStatus: "needs_review",
+      sources: [],
+    }),
+    50,
+  );
 });
 
 test("uses contrasting Mermaid palettes for dark and light themes", () => {
@@ -587,6 +655,13 @@ test("persists and reloads a job snapshot from the filesystem", async () => {
     assert.equal(loaded.status, "interrupted");
     assert.equal(loaded.checkpoint, "transcript");
     assert.equal(store.snapshot(interrupted).jobId, created.jobId);
+
+    const legacyRecord = { ...created } as unknown as Record<string, unknown>;
+    delete legacyRecord.softMaxHits;
+    delete legacyRecord.tailGraceSeconds;
+    const normalizedLegacy = persistedJobSchema.parse(legacyRecord);
+    assert.equal(normalizedLegacy.softMaxHits, 40);
+    assert.equal(normalizedLegacy.tailGraceSeconds, 300);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -604,7 +679,9 @@ test("persists capped state, timing budget, and continuation metadata", async ()
       "00000000-0000-4000-8000-000000000003",
       { maxHits: 80, maxRuntimeSeconds: 1_200 },
     );
-    assert.equal(created.maxHits, 40);
+    assert.equal(created.maxHits, 52);
+    assert.equal(created.softMaxHits, 40);
+    assert.equal(created.tailGraceSeconds, 300);
     assert.equal(created.maxRuntimeSeconds, 600);
     const capped = await store.write({
       ...created,

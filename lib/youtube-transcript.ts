@@ -4,7 +4,7 @@ import {
 } from "youtube-transcript";
 
 /** Maximum prompt size for one Codex extraction call, not a transcript cap. */
-export const TRANSCRIPT_CHUNK_CHARACTERS = 80_000;
+export const TRANSCRIPT_CHUNK_CHARACTERS = 12_000;
 export const TRANSCRIPT_CHUNK_OVERLAP_SEGMENTS = 1;
 
 export type TranscriptSegment = {

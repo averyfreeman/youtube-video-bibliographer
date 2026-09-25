@@ -14,7 +14,7 @@ The preserved raw result artifact `docs/RAW_PAGE_DOWNLOAD_1.md` is intentionally
 
 ## Known inspiration video
 
-The live acceptance target is <https://www.youtube.com/watch?v=Xxodq1QWvMk>. Run it locally only after `codex login` and confirm that captions are available. The default run is intentionally capped at 600 seconds and 40 hits. Record the job UUID, cursor, cap reason, elapsed time, warnings, transcript language, processed chunks, candidate phrases, final hit count, and generated Markdown.
+The live acceptance target is <https://www.youtube.com/watch?v=Xxodq1QWvMk>. Run it locally only after `codex login` and confirm that captions are available. The default run is intentionally capped at 600 seconds, normally 40 references, and at most 52 references during the final five minutes. Record the job UUID, cursor, cap reason, elapsed time, warnings, transcript language, processed chunks, candidate phrases, final hit count, and generated Markdown.
 
 The prior exhaustive baseline (`5728a0ea-36c5-4d96-a94c-8d13300ccb1e`) took more than three hours and produced 94 hits from 96 candidates. It is retained as evidence for the compact design; it is not a target output count.
 
@@ -29,6 +29,8 @@ Inspect at least one completed and one capped run. Confirm that:
 - timestamps remain in video order and continuation URLs use `t=<seconds>s`;
 - verification does not add or broaden titles beyond the supplied shortlist;
 - thumbnails are 320×180, lazy, and linked to the associated timestamp;
+- the default card layout shows a numbered timestamp/title, brief evidence, original-source link when available, concise bibliographer note, and collapsed audit details;
+- current/recent named events and public statements are eligible alongside historical references when the transcript supports them;
 - the capped alert is non-blocking and starts a new run at the saved cursor;
 - the standalone Markdown page and download contain exactly the generated Markdown.
 

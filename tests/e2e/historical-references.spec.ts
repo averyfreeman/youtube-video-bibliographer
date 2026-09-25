@@ -103,7 +103,9 @@ const bibliographyResponse = {
   capReason: null,
   resumeFromSeconds: null,
   resumeUrl: null,
-  maxHits: 40,
+  maxHits: 52,
+  softMaxHits: 40,
+  tailGraceSeconds: 300,
   createdAt: "2026-09-21T00:00:00.000Z",
   updatedAt: "2026-09-21T00:00:01.000Z",
 };
@@ -184,12 +186,18 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
     .click();
 
   await expect(
-    page.getByRole("heading", { name: "Historical references" }),
+    page.getByRole("heading", { name: "Bibliographical breakdown" }),
   ).toBeVisible();
   const cards = page.locator("article");
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0)).toContainText("00:01:02");
+  await expect(cards.nth(0)).toContainText("1. 00:01:02 — Earlier event");
   await expect(cards.nth(1)).toContainText("00:04:05");
+  await expect(
+    cards
+      .nth(0)
+      .getByRole("link", { name: "Original source: Primary archive" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "About this video" }),
   ).toBeVisible();
@@ -197,7 +205,9 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
   await expect(cards.nth(1)).toContainText("Speaker: The guest");
   await expect(cards.nth(1)).toContainText("What they were discussing");
   await cards.nth(1).locator("details").locator("summary").click();
-  await expect(page.getByText("Verify independently.")).toBeVisible();
+  await expect(cards.nth(1).getByText("Additional information")).toBeVisible();
+  await expect(cards.nth(1).getByText("Match confidence")).toBeVisible();
+  await expect(cards.nth(1).getByText("Source links")).toBeVisible();
   await expect(page.getByLabel("Markdown bibliography")).toHaveCount(0);
   await expect(page.locator("pre")).toHaveCount(0);
   await expect(page.getByText("Text description of the process")).toBeVisible();
@@ -285,7 +295,7 @@ test("recovers from a transient polling failure", async ({ page }) => {
     .click();
 
   await expect(
-    page.getByRole("heading", { name: "Historical references" }),
+    page.getByRole("heading", { name: "Bibliographical breakdown" }),
   ).toBeVisible({ timeout: 10_000 });
 });
 
@@ -379,7 +389,7 @@ test("shows API errors without leaving a stale result", async ({ page }) => {
       .filter({ hasText: "Captions could not be retrieved." }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Historical references" }),
+    page.getByRole("heading", { name: "Bibliographical breakdown" }),
   ).toHaveCount(0);
 });
 

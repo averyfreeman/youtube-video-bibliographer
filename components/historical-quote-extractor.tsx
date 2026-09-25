@@ -6,22 +6,22 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { ProcessFlowDiagram } from "@/components/process-flow-diagram";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import {
-  isWeakSource,
-  referenceCategoryLabels,
-} from "@/lib/historical-references";
+import { referenceCategoryLabels } from "@/lib/historical-references";
 import {
   isTerminalJobStatus,
   type CreateJobResponse,
   type JobSnapshot,
 } from "@/lib/job-types";
 import { timestampUrl } from "@/lib/markdown-export";
+import {
+  briefEvidence,
+  evidenceLabel,
+  matchConfidencePercent,
+  selectPrimarySource,
+  sourceQualityLabel,
+} from "@/lib/presentation";
 
 function readableEvidenceType(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function readableQuality(value: string) {
   return value.replace(/_/g, " ");
 }
 
@@ -295,8 +295,8 @@ export function HistoricalQuoteExtractor() {
                 {isLoading ? "Reading the video" : "Find historical references"}
               </button>
               <span className="text-sm text-base-content/60">
-                A focused reading list · up to 40 references · usually ready
-                within ten minutes
+                A thorough reading list · up to 40 references, with a small tail
+                allowance · usually ready within ten minutes
               </span>
             </div>
 
@@ -332,7 +332,8 @@ export function HistoricalQuoteExtractor() {
                     Possible references: {job.progress.candidateCount}
                   </span>
                   <span>
-                    References kept: {job.hits.length}/{job.maxHits}
+                    References kept: {job.hits.length} (usual limit{" "}
+                    {job.softMaxHits ?? Math.min(job.maxHits, 40)})
                   </span>
                   <span>Job: {job.jobId.slice(0, 8)}</span>
                 </div>
@@ -394,7 +395,9 @@ export function HistoricalQuoteExtractor() {
                 </div>
                 <p className="text-sm">
                   {job.capReason === "hits"
-                    ? `The ${job.maxHits}-hit cap was reached.`
+                    ? "The usual " +
+                      (job.softMaxHits ?? Math.min(job.maxHits, 40)) +
+                      "-reference limit was reached; the tail allowance was not needed."
                     : "The ten-minute processing budget was reached."}{" "}
                   Your partial reading list is saved.
                 </p>
@@ -421,10 +424,12 @@ export function HistoricalQuoteExtractor() {
                     ? "Reading list ready"
                     : "Partial reading list"}
                 </div>
-                <h2 className="text-3xl font-bold">Historical references</h2>
+                <h2 className="text-3xl font-bold">
+                  Bibliographical breakdown
+                </h2>
                 <p className="mt-2 text-base-content/70">
-                  {visibleHits.length} hit{visibleHits.length === 1 ? "" : "s"}{" "}
-                  in video order
+                  {visibleHits.length} reference
+                  {visibleHits.length === 1 ? "" : "s"} in video order
                   {job.transcriptLanguage
                     ? ` · captions: ${job.transcriptLanguage}`
                     : ""}
@@ -517,56 +522,18 @@ export function HistoricalQuoteExtractor() {
             ) : null}
 
             <div className="space-y-5">
-              {visibleHits.map((hit, index) => (
-                <article
-                  className="card card-border bg-base-100 shadow-sm"
-                  key={`${hit.timestamp}-${hit.title}`}
-                >
-                  {hit.thumbnailUrl ? (
-                    <figure className="bg-base-300">
-                      <a
-                        href={timestampUrl(job.videoUrl, hit.timestampSeconds)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <Image
-                          src={hit.thumbnailUrl}
-                          alt={`Storyboard thumbnail for ${hit.title} at ${hit.timestamp}`}
-                          width={320}
-                          height={180}
-                          className="h-auto w-full object-cover sm:max-h-44"
-                          loading="lazy"
-                          unoptimized
-                        />
-                      </a>
-                    </figure>
-                  ) : null}
-                  <div className="card-body gap-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="badge badge-outline">
-                          {referenceCategoryLabels[hit.category]}
-                        </span>
-                        <span className="badge badge-ghost">
-                          {readableEvidenceType(hit.evidenceType)}
-                        </span>
-                        <span className="badge badge-ghost">
-                          Confidence: {hit.confidence}
-                        </span>
-                        <span className="badge badge-ghost">
-                          {readableEvidenceType(hit.verificationStatus)}
-                        </span>
-                      </div>
-                      <span className="text-sm text-base-content/60">
-                        Hit {index + 1}
-                      </span>
-                    </div>
+              {visibleHits.map((hit, index) => {
+                const brief = briefEvidence(hit.videoEvidence);
+                const primarySource = selectPrimarySource(hit.sources);
 
-                    <div>
-                      <h3 className="text-2xl font-bold">{hit.title}</h3>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-base-content/70">
+                return (
+                  <article
+                    className="card card-border bg-base-100 shadow-sm"
+                    key={`${hit.timestamp}-${hit.title}`}
+                  >
+                    {hit.thumbnailUrl ? (
+                      <figure className="bg-base-300">
                         <a
-                          className="timestamp-link link link-primary font-mono"
                           href={timestampUrl(
                             job.videoUrl,
                             hit.timestampSeconds,
@@ -574,94 +541,208 @@ export function HistoricalQuoteExtractor() {
                           target="_blank"
                           rel="noreferrer"
                         >
-                          {hit.timestamp}
+                          <Image
+                            src={hit.thumbnailUrl}
+                            alt={`Storyboard thumbnail for ${hit.title} at ${hit.timestamp}`}
+                            width={320}
+                            height={180}
+                            className="h-auto w-full object-cover sm:max-h-44"
+                            loading="lazy"
+                            unoptimized
+                          />
                         </a>
-                        {hit.historicalDate ? (
-                          <span>Historical date: {hit.historicalDate}</span>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 text-sm text-base-content/70">
-                        Speaker:{" "}
-                        {hit.speaker ??
-                          "Not established in the video description."}
-                      </p>
-                    </div>
-
-                    <blockquote className="border-l-4 border-primary/40 pl-4 text-base-content/80">
-                      {hit.videoEvidence}
-                    </blockquote>
-
-                    {hit.discussionContextParagraphs.length > 0 ? (
-                      <div className="space-y-2 text-sm leading-6 text-base-content/75">
-                        <h4 className="font-semibold text-base-content">
-                          What they were discussing
-                        </h4>
-                        {hit.discussionContextParagraphs.map((paragraph) => (
-                          <p key={paragraph}>{paragraph}</p>
-                        ))}
-                      </div>
+                      </figure>
                     ) : null}
-
-                    <div>
-                      <h4 className="mb-2 font-semibold">
-                        Why this reference matters
-                      </h4>
-                      <div className="bibliographer-prose leading-7 text-base-content/80">
-                        {hit.analysisParagraphs.map((paragraph) => (
-                          <p key={paragraph}>{paragraph}</p>
-                        ))}
+                    <div className="card-body gap-5">
+                      <div>
+                        <h3 className="text-2xl font-bold leading-tight">
+                          <span>{index + 1}. </span>
+                          <a
+                            className="timestamp-link link link-primary font-mono"
+                            href={timestampUrl(
+                              job.videoUrl,
+                              hit.timestampSeconds,
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {hit.timestamp}
+                          </a>{" "}
+                          <span aria-hidden="true">—</span> {hit.title}
+                        </h3>
+                        <p className="mt-3 text-base-content/80">
+                          <span className="font-semibold">Brief version:</span>{" "}
+                          {brief.text}
+                        </p>
                       </div>
-                    </div>
 
-                    <details className="border-t border-base-300 pt-4 text-sm">
-                      <summary className="cursor-pointer font-semibold">
-                        Sources and further reading
-                      </summary>
-                      <div className="mt-3 space-y-3">
-                        <p className="text-base-content/70">
-                          {hit.verificationNote}
+                      {brief.isTruncated ? (
+                        <div className="space-y-2">
+                          <h4 className="font-semibold">
+                            {evidenceLabel(hit.evidenceType)}
+                          </h4>
+                          <blockquote className="border-l-4 border-primary/40 pl-4 text-base-content/80">
+                            {hit.videoEvidence}
+                          </blockquote>
+                        </div>
+                      ) : null}
+
+                      {hit.speaker ? (
+                        <p className="text-sm text-base-content/70">
+                          <span className="font-semibold">Speaker:</span>{" "}
+                          {hit.speaker}
                         </p>
-                        <p className="text-base-content/60">
-                          Confidence reasons: {hit.confidenceReasons.join("; ")}
-                        </p>
-                        {hit.sources.length > 0 ? (
-                          <ul className="space-y-2">
-                            {hit.sources.map((source) => (
-                              <li key={source.url}>
-                                <a
-                                  className="link link-primary"
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {source.title}
-                                </a>{" "}
+                      ) : null}
+
+                      {primarySource ? (
+                        <a
+                          className="link link-primary w-fit font-semibold"
+                          href={primarySource.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {primarySource.quality === "primary"
+                            ? "Original source"
+                            : "Best available source"}
+                          {": "}
+                          {primarySource.title}
+                        </a>
+                      ) : null}
+
+                      <div>
+                        <h4 className="mb-2 font-semibold">
+                          Bibliographer’s note
+                        </h4>
+                        <div className="bibliographer-prose leading-7 text-base-content/80">
+                          {hit.analysisParagraphs.map((paragraph) => (
+                            <p key={paragraph}>{paragraph}</p>
+                          ))}
+                        </div>
+                      </div>
+
+                      {hit.discussionContextParagraphs.length > 0 ? (
+                        <div className="space-y-2 text-sm leading-6 text-base-content/75">
+                          <h4 className="font-semibold text-base-content">
+                            What they were discussing
+                          </h4>
+                          {hit.discussionContextParagraphs.map((paragraph) => (
+                            <p key={paragraph}>{paragraph}</p>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <details className="border-t border-base-300 pt-4 text-sm">
+                        <summary className="cursor-pointer font-semibold">
+                          Audit
+                        </summary>
+                        <div className="mt-4 space-y-4">
+                          <h4 className="text-base font-semibold">
+                            Additional information
+                          </h4>
+                          {!hit.speaker ? (
+                            <p className="text-base-content/70">
+                              Speaker unavailable; the video description did not
+                              establish an attribution.
+                            </p>
+                          ) : null}
+                          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Match confidence
+                              </dt>
+                              <dd>
+                                {matchConfidencePercent(hit)}%{" "}
                                 <span className="text-base-content/60">
-                                  ({readableQuality(source.quality)})
+                                  (source-match display grade)
                                 </span>
-                                {isWeakSource(source) ? (
-                                  <span className="ml-2 text-warning">
-                                    Verify independently.
-                                  </span>
-                                ) : null}
-                                {source.note ? (
-                                  <span className="block text-base-content/60">
-                                    {source.note}
-                                  </span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-base-content/60">
-                            No trustworthy source was available yet.
-                          </p>
-                        )}
-                      </div>
-                    </details>
-                  </div>
-                </article>
-              ))}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Reason
+                              </dt>
+                              <dd>{hit.confidenceReasons.join("; ")}</dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Quality of source
+                              </dt>
+                              <dd>
+                                {primarySource
+                                  ? sourceQualityLabel(primarySource.quality)
+                                  : "No trustworthy source identified"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Historical date
+                              </dt>
+                              <dd>{hit.historicalDate ?? "Not established"}</dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Category
+                              </dt>
+                              <dd>{referenceCategoryLabels[hit.category]}</dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Evidence type
+                              </dt>
+                              <dd>{readableEvidenceType(hit.evidenceType)}</dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold text-base-content/60">
+                                Verification
+                              </dt>
+                              <dd>
+                                {readableEvidenceType(hit.verificationStatus)}
+                              </dd>
+                            </div>
+                          </dl>
+                          <div>
+                            <h5 className="font-semibold">Notes</h5>
+                            <p className="mt-1 text-base-content/75">
+                              {hit.verificationNote}
+                            </p>
+                          </div>
+                          <div>
+                            <h5 className="font-semibold">Source links</h5>
+                            {hit.sources.length > 0 ? (
+                              <ul className="mt-2 space-y-2">
+                                {hit.sources.map((source) => (
+                                  <li key={source.url}>
+                                    <a
+                                      className="link link-primary"
+                                      href={source.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {source.title}
+                                    </a>{" "}
+                                    <span className="text-base-content/60">
+                                      ({sourceQualityLabel(source.quality)})
+                                    </span>
+                                    {source.note ? (
+                                      <span className="block text-base-content/60">
+                                        {source.note}
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 text-base-content/60">
+                                No trustworthy source was available yet.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             {job.markdown ? (

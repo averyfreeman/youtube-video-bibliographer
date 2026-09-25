@@ -38,7 +38,7 @@ function argument(name: string) {
 function extractionPrompt(prompt: string, text: string) {
   return `${prompt}
 
-Benchmark the compact extraction contract. Return only meaningful multi-word historical phrases supported by this transcript. Exclude single words, introductions, metadata, and generic restatements. Return the JSON object required by the candidate schema.
+Benchmark the thorough bounded extraction contract. Return every defensible multi-word historical, current, or recent reference supported by this transcript, including named publications, events, regulations, and public or executive statements. Exclude single words, introductions, metadata, and generic restatements. Return the JSON object required by the candidate schema.
 
 TRANSCRIPT
 ----------
@@ -49,10 +49,11 @@ function synthesisPrompt(
   prompt: string,
   videoUrl: string,
   candidates: unknown,
+  hitLimit: number,
 ) {
   return `${prompt}
 
-Benchmark the compact synthesis contract. Deduplicate the supplied candidates, keep only their supplied titles, and return a concise JSON result with no more than 40 hits. Do not use web search for this local benchmark and do not add a new title.
+Benchmark the bounded synthesis contract. Deduplicate the supplied candidates, keep only their supplied titles, and return a concise JSON result with no more than ${hitLimit} hits. Do not use web search for this local benchmark and do not add a new title.
 Keep analysisParagraphs focused on historical significance. Speaker and discussion context are optional post-verification enrichment fields and are not part of this benchmark's historical pass.
 
 Source video: ${videoUrl}
@@ -141,7 +142,12 @@ async function main() {
         synthesisGroups = 1;
         codexCalls += 1;
         const raw = await runCodexJson({
-          prompt: synthesisPrompt(config.prompt, videoUrl, uniqueCandidates),
+          prompt: synthesisPrompt(
+            config.prompt,
+            videoUrl,
+            uniqueCandidates,
+            config.processing.maxHits,
+          ),
           schemaPath: "lib/codex-final.schema.json",
           reasoningEffort: effort,
           timeoutMs: 180_000,
@@ -154,7 +160,10 @@ async function main() {
             "Synthesis benchmark output failed schema validation.",
           );
         }
-        const retainedHits = deduplicateHits(parsed.data.hits);
+        const retainedHits = deduplicateHits(parsed.data.hits).slice(
+          0,
+          config.processing.maxHits,
+        );
         finalHits = retainedHits.length;
         if (retainedHits.length > 0) {
           codexCalls += 1;
@@ -221,7 +230,10 @@ async function main() {
       candidateReasoningEffort: config.processing.candidateReasoningEffort,
       synthesisReasoningEffort: config.processing.synthesisReasoningEffort,
       overviewReasoningEffort: config.processing.overviewReasoningEffort,
+      maxCandidatesPerChunk: config.processing.maxCandidatesPerChunk,
+      softMaxHits: config.processing.softMaxHits,
       maxHits: config.processing.maxHits,
+      tailGraceSeconds: config.processing.tailGraceSeconds,
       maxRuntimeSeconds: config.processing.maxRuntimeSeconds,
     },
     runs,

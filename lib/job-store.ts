@@ -13,10 +13,16 @@ import {
   type JobSnapshot,
 } from "./job-types.ts";
 import { calculateJobTiming } from "./job-types.ts";
+import {
+  DEFAULT_SOFT_MAX_HITS,
+  DEFAULT_TAIL_GRACE_SECONDS,
+} from "./job-policy.ts";
 import type { YouTubeTranscript } from "./youtube-transcript.ts";
 
 export type JobCreateOptions = {
   maxHits?: number;
+  softMaxHits?: number;
+  tailGraceSeconds?: number;
   maxRuntimeSeconds?: number;
 };
 
@@ -86,6 +92,14 @@ export class JobStore {
       options.maxHits ?? DEFAULT_MAX_HITS,
       MAX_HITS_LIMIT,
     );
+    const softMaxHits = Math.min(
+      options.softMaxHits ?? DEFAULT_SOFT_MAX_HITS,
+      maxHits,
+    );
+    const tailGraceSeconds = Math.max(
+      1,
+      options.tailGraceSeconds ?? DEFAULT_TAIL_GRACE_SECONDS,
+    );
     const maxRuntimeSeconds = Math.min(
       options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
       MAX_RUNTIME_SECONDS_LIMIT,
@@ -123,6 +137,8 @@ export class JobStore {
       resumeFromSeconds: null,
       resumeUrl: null,
       maxHits,
+      softMaxHits,
+      tailGraceSeconds,
       createdAt: now,
       updatedAt: now,
       chunkCharacters: null,
@@ -233,6 +249,8 @@ export class JobStore {
       resumeFromSeconds: record.resumeFromSeconds,
       resumeUrl: record.resumeUrl,
       maxHits: record.maxHits,
+      softMaxHits: record.softMaxHits,
+      tailGraceSeconds: record.tailGraceSeconds,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
