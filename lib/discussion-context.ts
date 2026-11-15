@@ -26,7 +26,7 @@ export const discussionContextItemSchema = z
 
 export const discussionContextResponseSchema = z
   .object({
-    contexts: z.array(discussionContextItemSchema).max(40),
+    contexts: z.array(discussionContextItemSchema).max(200),
   })
   .strict();
 

@@ -6,16 +6,36 @@ import path from "node:path";
 
 import { parseCodexJson } from "../../lib/codex.ts";
 import {
+  isAgyAvailable,
+  parseAgyJsonOutput,
+  resolveAgyModelName,
+} from "../../lib/agy.ts";
+import {
   buildBibliographerConfig,
   parseBibliographerToml,
 } from "../../lib/bibliographer-config.ts";
+import {
+  buildGeminiRequestBody,
+  extractGeminiResponseText,
+  runGeminiJson,
+} from "../../lib/gemini.ts";
+import {
+  mergeEditorialBatch,
+  mergeEditorialSections,
+} from "../../lib/editorial-synthesis.ts";
+import { resolveModelProvider } from "../../lib/model-runner.ts";
 import { buildVideoOverview } from "../../lib/video-overview.ts";
 import {
   discussionContextInputs,
   mergeDiscussionContext,
 } from "../../lib/discussion-context.ts";
-import { parseYouTubeMetadata } from "../../lib/youtube-metadata.ts";
 import {
+  parseChaptersFromDescription,
+  parseYouTubeMetadata,
+  planVideoChapters,
+} from "../../lib/youtube-metadata.ts";
+import {
+  extractionRequestSchema,
   historicalReferencesSchema,
   isWeakSource,
 } from "../../lib/historical-references.ts";
@@ -29,11 +49,21 @@ import {
   isTerminalJobStatus,
 } from "../../lib/job-types.ts";
 import {
+  candidatePrompt,
+  computeContiguousProcessedUntil,
+  computeResumeCursor,
   deduplicateCandidates,
   effectiveHitLimit,
   preserveSuppliedCandidates,
   preserveSuppliedHits,
+  selectBalancedCandidates,
 } from "../../lib/job-pipeline.ts";
+import {
+  buildPolicyBraintrustPayload,
+  renderPolicyBraintrustMdx,
+  toPolicyTimelineItems,
+} from "../../lib/policy-braintrust-export.ts";
+import { parseCliArgs } from "../../scripts/bibliographer-cli.ts";
 import {
   isIntroductionOrShowMetadata,
   isMeaningfulPhrase,
@@ -41,11 +71,15 @@ import {
 import {
   renderBibliographyMarkdown,
   timestampUrl,
+  timestampWindowUrl,
 } from "../../lib/markdown-export.ts";
 import {
   chunkTranscript,
+  filterTranscriptByRange,
   filterTranscriptFromTimestamp,
   formatTimestamp,
+  parseTimeParameter,
+  parseTimestampRange,
   parseTimestampStart,
   transcriptContextForTimestamp,
   type NormalizedTranscriptSegment,
@@ -343,8 +377,8 @@ test("loads project TOML with thorough bounded retrieval defaults", () => {
     candidate_reasoning_effort = "high"
     synthesis_reasoning_effort = "medium"
     overview_reasoning_effort = "xhigh"
-    max_hits = 52
-    max_runtime_minutes = 10
+    max_hits = 65
+    max_runtime_minutes = 15
   `);
   const config = buildBibliographerConfig(
     values,
@@ -358,24 +392,25 @@ test("loads project TOML with thorough bounded retrieval defaults", () => {
   assert.equal(config.processing.overviewReasoningEffort, "xhigh");
   assert.equal(config.processing.chunkCharacters, 12_000);
   assert.equal(config.processing.maxCandidatesPerChunk, 16);
-  assert.equal(config.processing.softMaxHits, 40);
-  assert.equal(config.processing.maxHits, 52);
+  assert.equal(config.processing.softMaxHits, 50);
+  assert.equal(config.processing.maxHits, 65);
   assert.equal(config.processing.tailGraceSeconds, 300);
-  assert.equal(config.processing.maxRuntimeSeconds, 600);
+  assert.equal(config.processing.maxRuntimeSeconds, 900);
+  assert.equal(config.processing.verificationBatchSize, 8);
 
   const boundedConfig = buildBibliographerConfig(
     parseBibliographerToml(`
       [processing]
-      max_hits = 80
-      max_runtime_minutes = 20
+      max_hits = 1000
+      max_runtime_minutes = 120
     `),
     "phrase-only",
     "/tmp/bibliographer.config.toml",
     "/tmp/DEFAULT_PROMPT.md",
   );
-  assert.equal(boundedConfig.processing.maxHits, 52);
-  assert.equal(boundedConfig.processing.softMaxHits, 40);
-  assert.equal(boundedConfig.processing.maxRuntimeSeconds, 600);
+  assert.equal(boundedConfig.processing.maxHits, 500);
+  assert.equal(boundedConfig.processing.softMaxHits, 50);
+  assert.equal(boundedConfig.processing.maxRuntimeSeconds, 3_600);
 });
 
 test("uses the hard hit ceiling only for the transcript tail", () => {
@@ -545,7 +580,9 @@ test("renders ordered Markdown and labels weak sources", () => {
   assert.match(markdown, /00:02:03/);
   assert.match(markdown, /verify independently/);
   assert.match(markdown, /## About this video/);
-  assert.match(markdown, /### What they were discussing/);
+  assert.match(markdown, /- Speakers: The host, The guest/);
+  assert.match(markdown, /- Subject: Historical interpretation/);
+  assert.match(markdown, /### Discussion topic/);
   assert.match(markdown, /### Why this reference matters/);
   assert.match(markdown, /Speaker: The guest/);
   assert.equal(isWeakSource(hit.sources[0]), true);
@@ -553,9 +590,10 @@ test("renders ordered Markdown and labels weak sources", () => {
   const withoutContext = renderBibliographyMarkdown(
     "https://www.youtube.com/watch?v=example123",
     null,
-    [{ ...hit, discussionContextParagraphs: [] }],
+    [{ ...hit, speaker: null, discussionContextParagraphs: [] }],
   );
-  assert.doesNotMatch(withoutContext, /What they were discussing/);
+  assert.doesNotMatch(withoutContext, /Discussion topic/);
+  assert.doesNotMatch(withoutContext, /Speaker not established/);
 });
 
 test("parses direct Codex output", () => {
@@ -660,7 +698,7 @@ test("persists and reloads a job snapshot from the filesystem", async () => {
     delete legacyRecord.softMaxHits;
     delete legacyRecord.tailGraceSeconds;
     const normalizedLegacy = persistedJobSchema.parse(legacyRecord);
-    assert.equal(normalizedLegacy.softMaxHits, 40);
+    assert.equal(normalizedLegacy.softMaxHits, 50);
     assert.equal(normalizedLegacy.tailGraceSeconds, 300);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -677,12 +715,12 @@ test("persists capped state, timing budget, and continuation metadata", async ()
     const created = await store.create(
       "https://www.youtube.com/watch?v=example123",
       "00000000-0000-4000-8000-000000000003",
-      { maxHits: 80, maxRuntimeSeconds: 1_200 },
+      { maxHits: 1_000, maxRuntimeSeconds: 7_200 },
     );
-    assert.equal(created.maxHits, 52);
-    assert.equal(created.softMaxHits, 40);
+    assert.equal(created.maxHits, 500);
+    assert.equal(created.softMaxHits, 50);
     assert.equal(created.tailGraceSeconds, 300);
-    assert.equal(created.maxRuntimeSeconds, 600);
+    assert.equal(created.maxRuntimeSeconds, 3_600);
     const capped = await store.write({
       ...created,
       status: "capped",
@@ -697,7 +735,8 @@ test("persists capped state, timing budget, and continuation metadata", async ()
     const snapshot = store.snapshot(capped);
 
     assert.equal(snapshot.status, "capped");
-    assert.equal(snapshot.timing.budgetSeconds, 600);
+    assert.equal(snapshot.canResume, true);
+    assert.equal(snapshot.timing.budgetSeconds, 3_600);
     assert.equal(snapshot.processedUntilSeconds, 599);
     assert.equal(snapshot.resumeFromSeconds, 600);
     assert.equal(snapshot.resumeUrl?.endsWith("t=600s"), true);
@@ -706,12 +745,845 @@ test("persists capped state, timing budget, and continuation metadata", async ()
   }
 });
 
-test("only failed, cancelled, and interrupted jobs are retryable", () => {
+test("only failed, cancelled, interrupted, and capped jobs are resumable", () => {
   assert.equal(isRetryableJobStatus("failed"), true);
   assert.equal(isRetryableJobStatus("cancelled"), true);
   assert.equal(isRetryableJobStatus("interrupted"), true);
+  assert.equal(isRetryableJobStatus("capped"), true);
   assert.equal(isRetryableJobStatus("completed"), false);
-  assert.equal(isRetryableJobStatus("capped"), false);
   assert.equal(isRetryableJobStatus("running"), false);
   assert.equal(isTerminalJobStatus("capped"), true);
+});
+
+test("accepts public_policy and economics_research categories and balances timeline shortlist", () => {
+  const parsed = historicalReferencesSchema.safeParse({
+    hits: [
+      {
+        title: "Affordable Care Act",
+        category: "public_policy",
+        evidenceType: "reference",
+        timestamp: "00:05:10",
+        timestampSeconds: 310,
+        historicalDate: "2010",
+        videoEvidence: "Under the Affordable Care Act medical loss ratio rule.",
+        confidence: "high",
+        confidenceReasons: ["Named federal statute explicitly discussed."],
+        verificationStatus: "verified",
+        verificationNote: "Verified against statutory text.",
+        analysisParagraphs: ["Established federal MLR thresholds."],
+        sources: [],
+      },
+      {
+        title: "RAND Health Insurance Experiment",
+        category: "economics_research",
+        evidenceType: "reference",
+        timestamp: "00:18:45",
+        timestampSeconds: 1125,
+        historicalDate: "1974-1982",
+        videoEvidence:
+          "The RAND Health Insurance Experiment found cost-sharing effects.",
+        confidence: "high",
+        confidenceReasons: ["Landmark empirical health economics study."],
+        verificationStatus: "verified",
+        verificationNote: "Verified against RAND report.",
+        analysisParagraphs: ["Found cost sharing reduced utilization."],
+        sources: [],
+      },
+    ],
+  });
+  assert.equal(parsed.success, true);
+
+  const manyCandidates = Array.from({ length: 24 }, (_, idx) => ({
+    title: `Policy Study ${idx + 1}`,
+    category: (idx % 2 === 0 ? "public_policy" : "economics_research") as
+      "public_policy" | "economics_research",
+    evidenceType: "reference" as const,
+    timestamp: formatTimestamp(idx * 100_000),
+    timestampSeconds: idx * 100,
+    historicalDate: null,
+    videoEvidence: `Reference ${idx + 1} in transcript.`,
+  }));
+  const balanced = selectBalancedCandidates(manyCandidates, 8);
+  assert.equal(balanced.length, 8);
+  assert.ok(balanced[0]!.timestampSeconds < 600);
+  assert.ok(balanced[balanced.length - 1]!.timestampSeconds >= 1_800);
+});
+
+test("computes contiguous progress and returns null resume cursor when all chunks finished", () => {
+  const chunks = [
+    {
+      index: 0,
+      text: "00:00:00 | a",
+      startTimestamp: "00:00:00",
+      endTimestamp: "00:05:00",
+      segments: [segment(0, "a"), segment(300, "b")],
+    },
+    {
+      index: 1,
+      text: "00:05:00 | c",
+      startTimestamp: "00:05:00",
+      endTimestamp: "00:10:00",
+      segments: [segment(300, "c"), segment(600, "d")],
+    },
+  ];
+  const candidate = {
+    title: "Policy Item",
+    category: "public_policy" as const,
+    evidenceType: "reference" as const,
+    timestamp: "00:01:00",
+    timestampSeconds: 60,
+    historicalDate: null,
+    videoEvidence: "Policy item evidence.",
+  };
+
+  assert.equal(
+    computeContiguousProcessedUntil(chunks, { "1": [candidate] }, 0),
+    0,
+  );
+  assert.equal(computeResumeCursor(chunks, { "0": [candidate] }, [], 600), 300);
+  assert.equal(
+    computeResumeCursor(
+      chunks,
+      { "0": [candidate], "1": [candidate] },
+      [],
+      600,
+    ),
+    null,
+  );
+});
+
+test("builds policy-braintrust timeline items, MDX dossier, and parses CLI args", () => {
+  const hit = {
+    title: "Medicare Advantage Risk Adjustment",
+    category: "public_policy" as const,
+    evidenceType: "reference" as const,
+    timestamp: "00:12:30",
+    timestampSeconds: 750,
+    historicalDate: "2024",
+    videoEvidence: "CMS risk adjustment coding rules for Medicare Advantage.",
+    speaker: null,
+    confidence: "high" as const,
+    confidenceReasons: ["Explicitly cited in CMS rule."],
+    verificationStatus: "verified" as const,
+    verificationNote: "Confirmed in CMS 2024 final rule.",
+    analysisParagraphs: ["Explains upcoding incentives in Medicare Advantage."],
+    discussionContextParagraphs: [],
+    sources: [
+      {
+        title: "CMS Final Rule",
+        url: "https://www.cms.gov/example",
+        quality: "primary" as const,
+        note: null,
+      },
+    ],
+  };
+
+  const timeline = toPolicyTimelineItems(
+    "https://www.youtube.com/watch?v=example123",
+    [hit],
+  );
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0]?.date, "2024");
+  assert.equal(timeline[0]?.sourceUrl, "https://www.cms.gov/example");
+  assert.equal(
+    timeline[0]?.videoTimestampUrl,
+    "https://www.youtube.com/watch?v=example123&t=750s",
+  );
+
+  const mdx = renderPolicyBraintrustMdx({
+    jobId: "00000000-0000-4000-8000-000000000004",
+    status: "completed",
+    videoUrl: "https://www.youtube.com/watch?v=example123",
+    videoOverview: {
+      title: "Policy Briefing",
+      channel: "Policy Channel",
+      date: "2026-10-01",
+      dateKind: "uploaded",
+      people: ["Host"],
+      theme: "Healthcare policy",
+      summary: "Summary of Medicare Advantage policy.",
+    },
+    hits: [hit],
+    markdown: "# Export",
+  });
+  assert.match(mdx, /PolicyTimeline/);
+  assert.match(mdx, /PolicyStatGrid/);
+  assert.match(mdx, /Medicare Advantage Risk Adjustment/);
+
+  const payload = buildPolicyBraintrustPayload(
+    {
+      jobId: "00000000-0000-4000-8000-000000000004",
+      status: "completed",
+      videoUrl: "https://www.youtube.com/watch?v=example123",
+      videoOverview: null,
+      hits: [hit],
+      markdown: "# Export",
+    },
+    { categories: ["economics_research"] },
+  );
+  assert.equal(payload.hits.length, 0);
+
+  const cli = parseCliArgs([
+    "run",
+    "https://www.youtube.com/watch?v=example123",
+    "--format",
+    "policy-mdx",
+    "--no-limit",
+    "--categories",
+    "public_policy,economics_research",
+  ]);
+  assert.equal(cli.command, "run");
+  assert.equal(cli.format, "policy-mdx");
+  assert.equal(cli.noLimit, true);
+  assert.deepEqual(cli.categories, ["public_policy", "economics_research"]);
+});
+
+test("supports Gemini request builder, provider resolution, and gpt-6-luna / hydrogen defaults", async () => {
+  const cfg = buildBibliographerConfig(
+    {},
+    "prompt",
+    "c.toml",
+    "DEFAULT_PROMPT.md",
+  );
+  assert.equal(cfg.llm.codexModel, "gpt-6-luna");
+  assert.equal(cfg.llm.agyModel, "gemini-4-hydrogen");
+  assert.equal(cfg.llm.geminiModel, "gemini-4-hydrogen");
+  assert.equal(cfg.llm.temperature, 0.15);
+  assert.equal(cfg.llm.editorialTemperature, 1.0);
+
+  assert.equal(resolveModelProvider(undefined, "auto", false, false), "codex");
+  assert.equal(resolveModelProvider(undefined, "auto", false, true), "agy");
+  assert.equal(resolveModelProvider(undefined, "auto", true, true), "gemini");
+  assert.equal(resolveModelProvider("agy", "auto", false, true), "agy");
+  assert.equal(resolveModelProvider("gemini", "auto", false, true), "agy");
+  assert.equal(resolveModelProvider("codex", "auto", true, true), "codex");
+
+  assert.equal(
+    resolveAgyModelName("gemini-4-hydrogen", "high"),
+    "gemini-4-hydrogen-high",
+  );
+  assert.equal(
+    resolveAgyModelName("gemini-4-hydrogen", "medium"),
+    "gemini-4-hydrogen-medium",
+  );
+  assert.equal(
+    resolveAgyModelName("gemini-4-hydrogen", "max"),
+    "gemini-4-hydrogen-xhigh",
+  );
+  assert.equal(
+    resolveAgyModelName("gemini-4-argon", "max"),
+    "gemini-4-argon-high",
+  );
+  assert.equal(
+    resolveAgyModelName("gemini-3.8-flash-low", "high"),
+    "gemini-3.8-flash-low",
+  );
+  assert.equal(
+    isAgyAvailable({ AGY_CLI_PATH: "/definitely/missing/agy-bin" }, "/tmp"),
+    false,
+  );
+  assert.deepEqual(
+    parseAgyJsonOutput(
+      JSON.stringify({
+        status: "SUCCESS",
+        structured_output: { sections: [{ title: "Act I" }] },
+      }),
+    ),
+    { sections: [{ title: "Act I" }] },
+  );
+  assert.deepEqual(
+    parseAgyJsonOutput(
+      'warning: non-json line\n{"status":"SUCCESS","response":"{\\"ok\\":true}"}',
+    ),
+    { ok: true },
+  );
+  assert.throws(
+    () =>
+      parseAgyJsonOutput(
+        JSON.stringify({ status: "ERROR", error: "401 Unauthorized" }),
+      ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "kind" in error &&
+      (error as { kind: string }).kind === "auth",
+  );
+
+  const editorialReq = buildGeminiRequestBody({
+    prompt: "hello",
+    webSearch: false,
+    temperature: 0.85,
+    topK: 40,
+  });
+  assert.deepEqual(editorialReq.generationConfig, {
+    temperature: 0.85,
+    topK: 40,
+    responseMimeType: "application/json",
+  });
+
+  const searchReq = buildGeminiRequestBody({
+    prompt: "verify",
+    webSearch: true,
+    temperature: 0.35,
+  });
+  assert.deepEqual(searchReq.tools, [{ google_search: {} }]);
+  assert.equal(
+    (searchReq.generationConfig as Record<string, unknown>).responseMimeType,
+    undefined,
+  );
+
+  const text = extractGeminiResponseText({
+    candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }],
+  });
+  assert.equal(text, '{"ok":true}');
+
+  let seenUrl = "";
+  const parsed = await runGeminiJson({
+    prompt: "hello",
+    apiKey: "test-key",
+    model: "gemini-4-hydrogen",
+    temperature: 0.85,
+    fetchImpl: (async (url: string | URL | Request) => {
+      seenUrl = String(url);
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: '```json\n{"sections":[]}\n```' }],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch,
+  });
+  assert.match(seenUrl, /gemini-4-hydrogen:generateContent/);
+  assert.deepEqual(parsed, { sections: [] });
+});
+
+test("merges editorial narrative and folds every hit into chronological sections cleanly", () => {
+  const hitA = {
+    title: "Glass-Steagall Repeal",
+    category: "regulation" as const,
+    evidenceType: "reference" as const,
+    timestamp: "00:03:01",
+    timestampSeconds: 181,
+    historicalDate: "1999",
+    videoEvidence: "Nobody said a word when Glass-Steagall was repealed.",
+    speaker: null,
+    confidence: "high" as const,
+    confidenceReasons: ["Named federal statute."],
+    verificationStatus: "verified" as const,
+    verificationNote: "Confirmed.",
+    analysisParagraphs: ["Dry initial note."],
+    discussionContextParagraphs: [],
+    sources: [
+      {
+        title: "Federal Reserve History",
+        url: "https://example.com/fed-glba",
+        quality: "primary" as const,
+        note: null,
+      },
+    ],
+  };
+  const hitB = {
+    ...hitA,
+    title: "Credit Default Swaps",
+    timestamp: "00:07:12",
+    timestampSeconds: 432,
+    sources: [],
+  };
+
+  const merged = mergeEditorialBatch(
+    [hitA, hitB],
+    {
+      items: [
+        {
+          title: "Glass-Steagall Repeal",
+          speaker: "Host One",
+          whatTheyWereTalkingAbout:
+            "He points out how quiet Congress was right before 2008.",
+          whyItMatters: [
+            "Tearing down the 1933 wall between commercial and investment banks set the fuse for 2008.",
+          ],
+          sourceNotes: [
+            {
+              url: "https://example.com/fed-glba",
+              note: "Fed essay breaking down the 1999 Gramm-Leach-Bliley Act.",
+            },
+            {
+              url: "https://invented.example.com/ignored",
+              note: "Must be ignored",
+            },
+          ],
+        },
+      ],
+    },
+    ["Host One"],
+  );
+
+  assert.equal(merged[0]?.speaker, "Host One");
+  assert.match(
+    merged[0]?.analysisParagraphs[0] ?? "",
+    /1933 wall between commercial and investment banks/,
+  );
+  assert.equal(merged[0]?.sources.length, 1);
+  assert.equal(
+    merged[0]?.sources[0]?.note,
+    "Fed essay breaking down the 1999 Gramm-Leach-Bliley Act.",
+  );
+
+  // Hit B was omitted by the sectioning pass and must be folded in rather than dropped.
+  const sections = mergeEditorialSections(merged, [
+    {
+      title: "Part I: Deregulation & Crises",
+      summary: "Why 1990s banking rules blew up in 2008.",
+      hitTitles: ["Glass-Steagall Repeal"],
+    },
+  ]);
+  assert.equal(sections.length, 1);
+  assert.deepEqual(sections[0]?.hitTitles, [
+    "Glass-Steagall Repeal",
+    "Credit Default Swaps",
+  ]);
+
+  const md = renderBibliographyMarkdown(
+    "https://www.youtube.com/watch?v=example123",
+    null,
+    merged,
+    sections,
+  );
+  assert.match(md, /## Part I: Deregulation & Crises/);
+  assert.match(md, /Fed essay breaking down the 1999 Gramm-Leach-Bliley Act/);
+  assert.match(md, /<summary>Verification & audit<\/summary>/);
+
+  const mdx = renderPolicyBraintrustMdx({
+    jobId: "00000000-0000-4000-8000-000000000005",
+    status: "completed",
+    videoUrl: "https://www.youtube.com/watch?v=example123",
+    videoOverview: null,
+    hits: merged,
+    sections,
+    markdown: md,
+  });
+  assert.match(mdx, /Part I: Deregulation & Crises/);
+  assert.match(mdx, /Source note: Fed essay breaking down/);
+
+  const restyleCli = parseCliArgs([
+    "restyle",
+    "9346afac-a74f-4638-8e26-aa8c638ef446",
+    "--provider",
+    "gemini",
+    "--temperature",
+    "0.9",
+  ]);
+  assert.equal(restyleCli.command, "restyle");
+  assert.equal(restyleCli.provider, "gemini");
+  assert.equal(restyleCli.temperature, 0.9);
+});
+
+test("supports start/end time ranges, chapter detection, unverified candidate counts, and expand CLI", async () => {
+  assert.equal(parseTimeParameter("1:05:30"), 3930);
+  assert.equal(parseTimeParameter("12:30"), 750);
+  assert.equal(parseTimeParameter("1h2m3s"), 3723);
+  assert.deepEqual(
+    parseTimestampRange(
+      "https://www.youtube.com/watch?v=abc123&t=10m&end=25:00",
+    ),
+    { startSeconds: 600, endSeconds: 1500 },
+  );
+  assert.deepEqual(
+    parseTimestampRange(
+      "https://www.youtube.com/watch?v=abc123&start=120&stop=300",
+    ),
+    { startSeconds: 120, endSeconds: 300 },
+  );
+  assert.equal(
+    timestampWindowUrl(
+      "https://www.youtube.com/watch?v=abc123&t=10s&end=99s",
+      600,
+      1500,
+    ),
+    "https://www.youtube.com/watch?v=abc123&t=600s&end=1500s",
+  );
+
+  const sampleSegments = [
+    segment(0, "Zero"),
+    segment(60, "Opening"),
+    segment(180, "Middle"),
+    segment(360, "Closing"),
+  ];
+  assert.deepEqual(
+    filterTranscriptByRange(sampleSegments, 60, 180).map((item) => item.text),
+    ["Opening", "Middle"],
+  );
+
+  const descriptionChapters = parseChaptersFromDescription(
+    [
+      "Topics covered:",
+      "00:00 Introduction & Framing",
+      "14:30 New Deal Banking Rules",
+      "01:02:15 2008 Liquidity Crunch",
+    ].join("\n"),
+    5400,
+  );
+  assert.equal(descriptionChapters.length, 3);
+  assert.deepEqual(descriptionChapters[0], {
+    title: "Introduction & Framing",
+    startSeconds: 0,
+    endSeconds: 869,
+  });
+  assert.deepEqual(descriptionChapters[2], {
+    title: "2008 Liquidity Crunch",
+    startSeconds: 3735,
+    endSeconds: 5400,
+  });
+
+  const metadata = parseYouTubeMetadata({
+    title: "Long Lecture",
+    channel: "Policy Lab",
+    duration: 5400,
+    chapters: [
+      { title: "Part 1", start_time: 0, end_time: 1800 },
+      { title: "Part 2", start_time: 1800, end_time: 5400 },
+    ],
+  });
+  assert.equal(metadata.durationSeconds, 5400);
+  assert.equal(metadata.chapters.length, 2);
+  assert.equal(metadata.chapters[1]?.title, "Part 2");
+
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "video-bibliographer-expand-"),
+  );
+  try {
+    const store = new JobStore(directory);
+    const created = await store.create(
+      "https://www.youtube.com/watch?v=example123&t=600s",
+      "00000000-0000-4000-8000-000000000009",
+      {
+        extractionDepth: "curated",
+        processingEndSeconds: 1500,
+      },
+    );
+    const updated = await store.write({
+      ...created,
+      status: "completed",
+      phase: "completed",
+      candidatesByChunk: {
+        "0": [
+          {
+            title: "Glass-Steagall Act",
+            category: "regulation",
+            evidenceType: "reference",
+            timestamp: "00:11:00",
+            timestampSeconds: 660,
+            historicalDate: "1933",
+            videoEvidence: "Glass-Steagall separated banking.",
+          },
+          {
+            title: "Bretton Woods Conference",
+            category: "event",
+            evidenceType: "reference",
+            timestamp: "00:18:00",
+            timestampSeconds: 1080,
+            historicalDate: "1944",
+            videoEvidence: "Delegates met at Bretton Woods.",
+          },
+        ],
+      },
+      hits: [
+        {
+          title: "Glass-Steagall Act",
+          category: "regulation",
+          evidenceType: "reference",
+          timestamp: "00:11:00",
+          timestampSeconds: 660,
+          historicalDate: "1933",
+          videoEvidence: "Glass-Steagall separated banking.",
+          speaker: null,
+          confidence: "high",
+          confidenceReasons: ["Explicit statute reference."],
+          verificationStatus: "verified",
+          verificationNote: "Verified.",
+          analysisParagraphs: ["1933 U.S. banking statute."],
+          discussionContextParagraphs: [],
+          sources: [],
+        },
+      ],
+    });
+    const snapshot = store.snapshot(updated);
+    assert.equal(snapshot.extractionDepth, "curated");
+    assert.equal(snapshot.processingStartSeconds, 600);
+    assert.equal(snapshot.processingEndSeconds, 1500);
+    assert.equal(snapshot.unverifiedCandidateCount, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+
+  const rangeCli = parseCliArgs([
+    "run",
+    "https://www.youtube.com/watch?v=example123",
+    "--start",
+    "12:30",
+    "--end",
+    "1:05:00",
+    "--all-candidates",
+  ]);
+  assert.equal(rangeCli.startSeconds, 750);
+  assert.equal(rangeCli.endSeconds, 3900);
+  assert.equal(rangeCli.allCandidates, true);
+
+  const expandCli = parseCliArgs([
+    "expand",
+    "9346afac-a74f-4638-8e26-aa8c638ef446",
+    "--provider",
+    "codex",
+  ]);
+  assert.equal(expandCli.command, "expand");
+  assert.equal(expandCli.target, "9346afac-a74f-4638-8e26-aa8c638ef446");
+  assert.equal(expandCli.provider, "codex");
+
+  const allSectionsCli = parseCliArgs([
+    "run",
+    "https://www.youtube.com/watch?v=example123",
+    "--all-sections",
+  ]);
+  assert.equal(allSectionsCli.command, "run");
+  assert.equal(allSectionsCli.allSections, true);
+});
+
+test("coalesces tiny chapters (<3m), collapses short videos into 1 pass, and persists chapter plans", async () => {
+  // Video <= 45m fits in 1 pass even with chapters
+  const shortPlan = planVideoChapters(
+    [
+      { title: "Part 1", startSeconds: 0, endSeconds: 1200 },
+      { title: "Part 2", startSeconds: 1201, endSeconds: 2400 },
+    ],
+    2400,
+  );
+  assert.equal(shortPlan.fitsSinglePass, true);
+  assert.deepEqual(shortPlan.plannedChapters, []);
+
+  // 2h30m video with <3m intro, middle bridge, and outro merges short chapters cleanly
+  const longPlan = planVideoChapters(
+    [
+      { title: "Intro", startSeconds: 0, endSeconds: 45 },
+      { title: "Chapter 1", startSeconds: 46, endSeconds: 2000 },
+      { title: "Quick Ad Break", startSeconds: 2001, endSeconds: 2060 },
+      { title: "Chapter 2", startSeconds: 2061, endSeconds: 8899 },
+      { title: "Outro", startSeconds: 8900, endSeconds: 9000 },
+    ],
+    9000,
+  );
+  assert.equal(longPlan.fitsSinglePass, false);
+  assert.equal(longPlan.coalescedCount, 3);
+  assert.equal(longPlan.plannedChapters.length, 2);
+  assert.equal(longPlan.plannedChapters[0]?.startSeconds, 0);
+  assert.equal(
+    longPlan.plannedChapters[0]?.title,
+    "Intro / Chapter 1 / Quick Ad Break",
+  );
+  assert.equal(longPlan.plannedChapters[1]?.endSeconds, 9000);
+  assert.equal(longPlan.plannedChapters[1]?.title, "Chapter 2 / Outro");
+
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "video-bibliographer-plan-"),
+  );
+  try {
+    const store = new JobStore(directory);
+    const created = await store.create(
+      "https://www.youtube.com/watch?v=example123",
+      "00000000-0000-4000-8000-000000000010",
+      {
+        chapterPlan: longPlan.plannedChapters,
+        allowUnlimited: true,
+        maxRuntimeSeconds: 7200,
+      },
+    );
+    assert.equal(created.chapterPlan.length, 2);
+    assert.equal(created.completedChapters, 0);
+    assert.equal(created.currentChapterIndex, null);
+    const snapshot = store.snapshot(created);
+    assert.equal(snapshot.chapterPlan.length, 2);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("prioritizes research focus prompt and target categories across prompt, selection, store, and CLI", async () => {
+  const defaultConfig = buildBibliographerConfig(
+    {},
+    "Base bibliographer prompt.",
+    "bibliographer.config.toml",
+    "DEFAULT_PROMPT.md",
+  );
+  const chunk = {
+    index: 0,
+    startSeconds: 0,
+    endSeconds: 120,
+    startTimestamp: "00:00:00",
+    endTimestamp: "00:02:00",
+    text: "[00:00:10] Discussion of Sherman Antitrust Act.",
+    segments: [],
+  };
+
+  const unfocusedPrompt = candidatePrompt(chunk, defaultConfig);
+  assert.equal(
+    unfocusedPrompt.includes("USER RESEARCH FOCUS & TARGET CRITERIA:"),
+    false,
+  );
+
+  const focusedPrompt = candidatePrompt(chunk, defaultConfig, {
+    focusPrompt: "Focus on FTC merger enforcement and hospital consolidation",
+    targetCategories: ["economics_research", "public_policy"],
+  });
+  assert.match(focusedPrompt, /USER RESEARCH FOCUS & TARGET CRITERIA:/);
+  assert.match(focusedPrompt, /Economics research, Public policy/);
+  assert.match(
+    focusedPrompt,
+    /Focus on FTC merger enforcement and hospital consolidation/,
+  );
+
+  const candidates = [
+    {
+      title: "Incidental Event",
+      category: "other" as const,
+      evidenceType: "reference" as const,
+      timestamp: "00:00:10",
+      timestampSeconds: 10,
+      historicalDate: null,
+      videoEvidence: "We went to Chicago last week.",
+    },
+    {
+      title: "Sherman Antitrust Act",
+      category: "public_policy" as const,
+      evidenceType: "reference" as const,
+      timestamp: "00:00:20",
+      timestampSeconds: 20,
+      historicalDate: "1890",
+      videoEvidence: "Under the Sherman Antitrust Act of 1890.",
+    },
+    {
+      title: "Hospital Merger Price Study",
+      category: "economics_research" as const,
+      evidenceType: "direct_quote" as const,
+      timestamp: "00:00:30",
+      timestampSeconds: 30,
+      historicalDate: null,
+      videoEvidence: "Mergers raised prices by 18 percent.",
+    },
+    {
+      title: "Celebrity Cameo",
+      category: "other" as const,
+      evidenceType: "direct_quote" as const,
+      timestamp: "00:00:40",
+      timestampSeconds: 40,
+      historicalDate: null,
+      videoEvidence: "Hello from New York.",
+    },
+  ];
+  const shortlisted = selectBalancedCandidates(candidates, 2, [
+    "public_policy",
+    "economics_research",
+  ]);
+  assert.deepEqual(
+    shortlisted.map((item) => item.title),
+    ["Sherman Antitrust Act", "Hospital Merger Price Study"],
+  );
+
+  const validated = extractionRequestSchema.parse({
+    videoUrl: "https://www.youtube.com/watch?v=example123",
+    focusPrompt: "Focus on antitrust cases",
+    targetCategories: ["public_policy", "economics_research"],
+  });
+  assert.equal(validated.focusPrompt, "Focus on antitrust cases");
+  assert.deepEqual(validated.targetCategories, [
+    "public_policy",
+    "economics_research",
+  ]);
+
+  const cliFocus = parseCliArgs([
+    "run",
+    "https://www.youtube.com/watch?v=example123",
+    "--focus",
+    "FTC enforcement actions",
+    "--categories",
+    "public_policy,economics_research",
+  ]);
+  assert.equal(cliFocus.focusPrompt, "FTC enforcement actions");
+  assert.deepEqual(cliFocus.categories, [
+    "public_policy",
+    "economics_research",
+  ]);
+
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "video-bibliographer-focus-"),
+  );
+  try {
+    const store = new JobStore(directory);
+    const created = await store.create(
+      "https://www.youtube.com/watch?v=example123",
+      "00000000-0000-4000-8000-000000000011",
+      {
+        focusPrompt: "  FTC enforcement actions  ",
+        targetCategories: ["public_policy", "public_policy", "quote"],
+      },
+    );
+    assert.equal(created.focusPrompt, "FTC enforcement actions");
+    assert.deepEqual(created.targetCategories, ["public_policy", "quote"]);
+    const snapshot = store.snapshot(created);
+    assert.equal(snapshot.focusPrompt, "FTC enforcement actions");
+    assert.deepEqual(snapshot.targetCategories, ["public_policy", "quote"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("parses bracketed description chapters and auto-splits long unchaptered videos into 30m windows", () => {
+  const bracketed = parseChaptersFromDescription(
+    "[00:00] Opening Frame\n(15:30) Second Segment\n3. 45:00 Closing Debate",
+    3600,
+  );
+  assert.equal(bracketed.length, 3);
+  assert.deepEqual(bracketed[0], {
+    title: "Opening Frame",
+    startSeconds: 0,
+    endSeconds: 929,
+  });
+  assert.deepEqual(bracketed[1], {
+    title: "Second Segment",
+    startSeconds: 930,
+    endSeconds: 2699,
+  });
+  assert.deepEqual(bracketed[2], {
+    title: "Closing Debate",
+    startSeconds: 2700,
+    endSeconds: 3600,
+  });
+
+  const shortUnchaptered = planVideoChapters([], 1800);
+  assert.equal(shortUnchaptered.fitsSinglePass, true);
+  assert.equal(shortUnchaptered.autoSplitWindows, false);
+  assert.deepEqual(shortUnchaptered.plannedChapters, []);
+
+  const longUnchaptered = planVideoChapters([], 5400);
+  assert.equal(longUnchaptered.fitsSinglePass, false);
+  assert.equal(longUnchaptered.autoSplitWindows, true);
+  assert.equal(longUnchaptered.plannedChapters.length, 3);
+  assert.deepEqual(longUnchaptered.plannedChapters[0], {
+    title: "Part 1",
+    startSeconds: 0,
+    endSeconds: 1799,
+  });
+  assert.deepEqual(longUnchaptered.plannedChapters[1], {
+    title: "Part 2",
+    startSeconds: 1800,
+    endSeconds: 3599,
+  });
+  assert.deepEqual(longUnchaptered.plannedChapters[2], {
+    title: "Part 3",
+    startSeconds: 3600,
+    endSeconds: 5400,
+  });
 });

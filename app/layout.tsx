@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "YouTube Video Bibliographer",
   description:
-    "Build a timestamped historical bibliography from a YouTube transcript.",
+    "Build a timestamped bibliography of historical, public policy, and economics research references from a YouTube transcript.",
 };
 
 export default function RootLayout({

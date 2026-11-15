@@ -2,6 +2,9 @@
   "name": "video-bibliographer",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "bibliographer": "./scripts/bibliographer-cli.ts"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,6 +16,7 @@
     "test": "node --test --experimental-strip-types tests/unit/*.test.ts",
     "test:e2e": "playwright test",
     "benchmark": "node --experimental-strip-types scripts/benchmark.ts",
+    "cli": "node --experimental-strip-types scripts/bibliographer-cli.ts",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "dependencies": {

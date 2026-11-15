@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "title": "Find a focused historical reading list",
-  "description": "A ten-minute, phrase-only reading-list run with storyboard thumbnails and a timestamped continuation path.",
+  "title": "Find a focused reference reading list",
+  "description": "A phrase-only reading-list run across history, public policy, and economics research with parallel batched verification and resumable checkpoints.",
   "diagrams": [
     {
       "id": "bibliographer_flow",
-      "title": "Find a focused historical reading list",
-      "description": "Captions move through phrase curation, source checking, and a portable reading list. A limit returns a continuation timestamp.",
-      "accessibility": "Start with a YouTube video, read captions from the optional timestamp, find meaningful historical references, remove repeats, check sources, optionally add one short discussion-context paragraph, and show a reading list with thumbnails and Markdown export. If the ten-minute or forty-reference limit is reached, save the cursor and offer a continuation URL.",
+      "title": "Find a focused reference reading list",
+      "description": "Captions move through phrase curation, timeline balancing, parallel batched verification, and a portable reading list.",
+      "accessibility": "Start with a YouTube video, read captions from the optional timestamp, find meaningful references, remove repeats and balance the timeline, verify sources in parallel batches, optionally add one short discussion-context paragraph, and show a reading list with thumbnails and Markdown export. If a limit is reached, resume in-place from the saved checkpoint without losing results.",
       "kind": "flowchart",
       "data": {
         "direction": "LR",
@@ -15,13 +15,13 @@
           { "id": "url", "label": "YouTube video" },
           { "id": "captions", "label": "Read captions" },
           { "id": "cursor", "label": "Optional start time" },
-          { "id": "phrases", "label": "Find historical references" },
-          { "id": "dedupe", "label": "Remove repeats" },
-          { "id": "verify", "label": "Check sources" },
+          { "id": "phrases", "label": "Find references" },
+          { "id": "dedupe", "label": "Remove repeats & balance timeline" },
+          { "id": "verify", "label": "Verify sources in parallel batches" },
           { "id": "enrich", "label": "Add optional video context" },
           { "id": "results", "label": "Reading list + thumbnails" },
           { "id": "markdown", "label": "Downloadable Markdown" },
-          { "id": "cap", "label": "Pause at 10 minutes or 40 references" }
+          { "id": "cap", "label": "Pause cleanly with saved checkpoint" }
         ],
         "edges": [
           { "from": "url", "to": "captions", "arrow": "-->" },

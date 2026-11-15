@@ -39,7 +39,7 @@ export function evidenceLabel(
   evidenceType: HistoricalReference["evidenceType"],
 ) {
   return evidenceType === "direct_quote"
-    ? "Quote in video"
+    ? "Exact quote:"
     : "Reference in video";
 }
 

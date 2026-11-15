@@ -10,16 +10,26 @@ candidate_reasoning_effort = "high"
 synthesis_reasoning_effort = "medium"
 overview_reasoning_effort = "medium"
 chunk_characters = 12000
-candidate_concurrency = 2
-synthesis_concurrency = 1
-verification_concurrency = 1
+candidate_concurrency = 3
+synthesis_concurrency = 3
+verification_concurrency = 3
+verification_batch_size = 8
 max_candidates_per_chunk = 16
-soft_max_hits = 40
-max_hits = 52
+soft_max_hits = 50
+max_hits = 65
 tail_grace_seconds = 300
-max_runtime_minutes = 10
+max_runtime_minutes = 15
 
 [thumbnails]
 enabled = true
 ytdlp_path = "yt-dlp"
 ffmpeg_path = "ffmpeg"
+
+[llm]
+provider = "auto"
+codex_model = "gpt-6-luna"
+agy_model = "gemini-4-hydrogen"
+gemini_model = "gemini-4-hydrogen"
+temperature = 0.15
+editorial_temperature = 1.0
+top_k = 40

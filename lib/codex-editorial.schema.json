@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "speaker",
+          "whatTheyWereTalkingAbout",
+          "whyItMatters",
+          "sourceNotes"
+        ],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "speaker": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "whatTheyWereTalkingAbout": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "whyItMatters": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": { "type": "string", "minLength": 1, "maxLength": 4000 }
+          },
+          "sourceNotes": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "note"],
+              "properties": {
+                "url": { "type": "string", "minLength": 1 },
+                "note": { "type": "string", "minLength": 1, "maxLength": 500 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

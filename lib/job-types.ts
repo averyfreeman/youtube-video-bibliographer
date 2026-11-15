@@ -1,16 +1,23 @@
 import { z } from "zod";
 
 import {
+  extractionDepthSchema,
   historicalCandidateSchema,
   historicalReferenceSchema,
+  modelProviderSchema,
   presentationHistoricalReferenceSchema,
+  referenceCategorySchema,
   videoOverviewSchema,
+  videoSectionSchema,
 } from "./historical-references.ts";
 import {
   DEFAULT_SOFT_MAX_HITS,
   DEFAULT_TAIL_GRACE_SECONDS,
 } from "./job-policy.ts";
-import { youtubeMetadataSchema } from "./youtube-metadata-schema.ts";
+import {
+  youtubeChapterSchema,
+  youtubeMetadataSchema,
+} from "./youtube-metadata-schema.ts";
 
 export const jobStatuses = [
   "queued",
@@ -74,6 +81,7 @@ export const jobSnapshotSchema = z
     transcriptLanguage: z.string().nullable(),
     transcriptTruncated: z.boolean(),
     videoOverview: videoOverviewSchema.nullable().default(null),
+    sections: z.array(videoSectionSchema).default([]),
     warnings: z.array(z.string()),
     hits: z.array(presentationHistoricalReferenceSchema),
     markdown: z.string().nullable(),
@@ -81,10 +89,34 @@ export const jobSnapshotSchema = z
     timing: jobTimingSchema,
     startedAt: z.string().datetime().nullable(),
     processingStartSeconds: z.number().int().nonnegative(),
+    processingEndSeconds: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .default(null),
     processedUntilSeconds: z.number().int().nonnegative(),
     capReason: capReasonSchema.nullable(),
     resumeFromSeconds: z.number().int().nonnegative().nullable(),
     resumeUrl: z.string().url().nullable(),
+    canResume: z.boolean().default(false),
+    extractionDepth: extractionDepthSchema.default("curated"),
+    focusPrompt: z.string().nullable().default(null),
+    targetCategories: z.array(referenceCategorySchema).default([]),
+    durationSeconds: z.number().int().nonnegative().nullable().default(null),
+    chapters: z.array(youtubeChapterSchema).default([]),
+    chapterPlan: z.array(youtubeChapterSchema).default([]),
+    completedChapters: z.number().int().nonnegative().default(0),
+    currentChapterIndex: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .default(null),
+    unverifiedCandidateCount: z.number().int().nonnegative().default(0),
+    includeThumbnails: z.boolean().default(false),
+    provider: modelProviderSchema.default("auto"),
+    temperature: z.number().min(0).max(2).nullable().default(null),
     maxHits: z.number().int().positive(),
     softMaxHits: z.number().int().positive().default(DEFAULT_SOFT_MAX_HITS),
     tailGraceSeconds: z
@@ -98,6 +130,26 @@ export const jobSnapshotSchema = z
   .strict();
 
 export type JobSnapshot = z.infer<typeof jobSnapshotSchema>;
+
+export const jobSummarySchema = z
+  .object({
+    jobId: z.string().uuid(),
+    videoUrl: z.string().url(),
+    title: z.string().nullable(),
+    status: jobStatusSchema,
+    phase: jobPhaseSchema,
+    hitCount: z.number().int().nonnegative(),
+    candidateCount: z.number().int().nonnegative(),
+    percent: z.number().int().min(0).max(100),
+    capReason: capReasonSchema.nullable(),
+    canResume: z.boolean(),
+    resumeUrl: z.string().url().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export type JobSummary = z.infer<typeof jobSummarySchema>;
 
 export const createJobResponseSchema = z
   .object({
@@ -143,7 +195,10 @@ export function isTerminalJobStatus(status: JobStatus) {
 
 export function isRetryableJobStatus(status: JobStatus) {
   return (
-    status === "failed" || status === "cancelled" || status === "interrupted"
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "interrupted" ||
+    status === "capped"
   );
 }
 
@@ -154,9 +209,9 @@ export function phaseMessage(phase: JobPhase) {
     case "retrieving_transcript":
       return "Reading the captions.";
     case "extracting_candidates":
-      return "Finding historical references.";
+      return "Finding references.";
     case "synthesizing":
-      return "Checking sources and keeping the strongest references.";
+      return "Checking sources in parallel and keeping the strongest references.";
     case "completed":
       return "Your reading list is ready.";
     case "failed":
@@ -164,7 +219,7 @@ export function phaseMessage(phase: JobPhase) {
     case "cancelled":
       return "This reading list was cancelled.";
     case "capped":
-      return "This run reached its limit; continue from the saved timestamp when you are ready.";
+      return "This run reached its limit; your saved references are preserved and ready to resume.";
   }
 }
 

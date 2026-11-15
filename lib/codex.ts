@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 
-export const CODEX_MODEL = "gpt-5.6-luna";
+export const CODEX_MODEL = "gpt-6-luna";
 export const CODEX_REASONING_EFFORT = "medium";
 export const CODEX_CANDIDATE_TIMEOUT_MS = 300_000;
 export const CODEX_FINAL_TIMEOUT_MS = 1_800_000;
@@ -29,6 +29,7 @@ export type RunCodexJsonOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   reasoningEffort?: string;
+  model?: string;
 };
 
 function commandName() {
@@ -147,6 +148,7 @@ export function runCodexJson({
   timeoutMs = CODEX_CANDIDATE_TIMEOUT_MS,
   signal,
   reasoningEffort = CODEX_REASONING_EFFORT,
+  model = CODEX_MODEL,
 }: RunCodexJsonOptions): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const outputSchemaPath = path.resolve(process.cwd(), schemaPath);
@@ -160,7 +162,7 @@ export function runCodexJson({
       "--sandbox",
       "read-only",
       "--model",
-      CODEX_MODEL,
+      model,
       "--config",
       `model_reasoning_effort=${reasoningEffort}`,
       "--output-schema",

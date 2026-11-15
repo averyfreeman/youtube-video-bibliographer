@@ -5,7 +5,7 @@ import { HistoricalQuoteExtractor } from "@/components/historical-quote-extracto
 export const metadata: Metadata = {
   title: "YouTube Video Bibliographer",
   description:
-    "Extract and source historical quotes and events from a YouTube transcript.",
+    "Extract and source historical, public policy, and economics research references from a YouTube transcript.",
 };
 
 export default function BibliographerPage() {

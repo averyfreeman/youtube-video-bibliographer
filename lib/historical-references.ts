@@ -1,11 +1,15 @@
 import { z } from "zod";
 
+import { youtubeChapterSchema } from "./youtube-metadata-schema.ts";
+
 export const referenceCategories = [
   "quote",
   "publication",
   "event",
   "financial_crisis",
   "regulation",
+  "public_policy",
+  "economics_research",
   "executive_statement",
   "other",
 ] as const;
@@ -16,6 +20,8 @@ export const referenceCategoryLabels: Record<ReferenceCategory, string> = {
   event: "Event",
   financial_crisis: "Financial crisis",
   regulation: "Regulation",
+  public_policy: "Public policy",
+  economics_research: "Economics research",
   executive_statement: "Executive statement",
   other: "Other",
 };
@@ -57,6 +63,14 @@ export type Confidence = z.infer<typeof confidenceSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 export type VideoOverviewDateKind = z.infer<typeof videoOverviewDateKindSchema>;
 
+export const modelProviders = ["auto", "codex", "agy", "gemini"] as const;
+export const modelProviderSchema = z.enum(modelProviders);
+export type ModelProvider = z.infer<typeof modelProviderSchema>;
+
+export const extractionDepths = ["all", "curated"] as const;
+export const extractionDepthSchema = z.enum(extractionDepths);
+export type ExtractionDepth = z.infer<typeof extractionDepthSchema>;
+
 const youtubeUrlSchema = z
   .string()
   .trim()
@@ -73,8 +87,31 @@ const youtubeUrlSchema = z
 export const extractionRequestSchema = z
   .object({
     videoUrl: youtubeUrlSchema,
+    includeThumbnails: z.boolean().default(false),
+    provider: modelProviderSchema.optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    startSeconds: z.number().int().nonnegative().optional(),
+    endSeconds: z.number().int().nonnegative().nullable().optional(),
+    extractionDepth: extractionDepthSchema.optional(),
+    focusPrompt: z.string().trim().max(500).optional(),
+    targetCategories: z
+      .array(referenceCategorySchema)
+      .max(referenceCategories.length)
+      .optional(),
+    useChapterPlan: z.boolean().optional(),
+    chapters: z.array(youtubeChapterSchema).max(60).optional(),
   })
   .strict();
+
+export const videoSectionSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    summary: z.string().trim().min(1).max(1_000),
+    hitTitles: z.array(z.string().trim().min(1).max(240)).min(1),
+  })
+  .strict();
+
+export type VideoSection = z.infer<typeof videoSectionSchema>;
 
 export type ExtractionRequest = z.infer<typeof extractionRequestSchema>;
 

@@ -1,36 +1,46 @@
 ---
 name: video-bibliographer
 version: 3.0.0
-description: Use when extracting and source-checking curated historical phrases from a timestamped spoken-video transcript.
+description: Use when extracting and source-checking curated historical, public policy, and economics research phrases from a timestamped spoken-video transcript.
 author: Assistant
-tags: [transcripts, bibliography, citations, youtube, evidence, verification]
+tags:
+  [
+    transcripts,
+    bibliography,
+    citations,
+    youtube,
+    evidence,
+    verification,
+    policy,
+    economics,
+  ]
 ---
 
 # Video Bibliographer
 
-Build a thorough but bounded, auditable bibliography from a spoken-video transcript. The result is a video timeline of supported multi-word historical phrases, not a glossary or line-by-line transcript summary.
+Build a thorough but bounded, auditable bibliography from a spoken-video transcript. The result is a video timeline of supported multi-word references (historical events, quotations, named publications, public policy, economics research, regulations, and executive statements), not a glossary or line-by-line transcript summary.
 
 ## Workflow
 
 1. Read the supplied timestamped transcript window and preserve its offsets.
-2. Scan the full supplied window before selecting high-value multi-word phrases: explicit quotations, named publications, historical events, financial crises, regulations, executive statements, current or recent public statements, and other named historical subjects supported by the speech.
+2. Scan the full supplied window before selecting high-value multi-word phrases: explicit quotations, named publications, historical events, financial crises, regulations, public policy, economics research, executive statements, current or recent public statements, and other named subjects supported by the speech.
 3. Reject single-word concepts, host or guest introductions, greetings, show/episode metadata, sponsor language, generic restatements, and ordinary transitions.
 4. Deduplicate phrase titles globally before web verification. Keep the strongest evidence and the earliest timestamp unless distinct wording materially changes the reference.
-5. Verify only the supplied shortlist. Verification may improve dates, source notes, and uncertainty, but it must not add or broaden a hit.
+5. Verify only the supplied shortlist in parallel batches. Verification may improve dates, source notes, and uncertainty, but it must not add or broaden a hit.
 6. Return the caller's configured bounded hit set, in video-timestamp order, with explicit uncertainty and unavailable sources. Do not stop after the first few defensible references merely to keep the list short.
 
 ## Active project contract
 
-The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-5.6-luna` with high-recall candidate extraction, medium synthesis/overview reasoning, 12,000-character chunks, 16 candidates per chunk, a ten-minute budget, a 40-hit soft limit, and a 52-hit hard ceiling. When five minutes or less of transcript remain, the pipeline may use the additional tail allowance. User-level Codex configuration is ignored intentionally.
+The application owns `bibliographer.config.toml` and injects `DEFAULT_PROMPT.md` into isolated Codex prompts. The default local Codex path uses `gpt-6-luna` (plus an optional `GEMINI_API_KEY` REST provider defaulting to `gemini-4-hydrogen`) with high-recall candidate extraction, medium verification/overview/editorial reasoning, 12,000-character chunks, 16 candidates per chunk, a 15-minute budget, a 50-hit soft target, a 65-hit hard ceiling, thematic video sections, opt-in thumbnails (disabled by default), and parallel batched verification (`verification_batch_size = 8`, `verification_concurrency = 3`). User-level Codex configuration is ignored intentionally.
 
-Long jobs are checkpointed. A `capped` run records elapsed time, ETA, processed cursor, cap reason, and a continuation YouTube URL using `t=<seconds>s`. A continuation is a new run filtered from that timestamp; it is not a retry of the capped job.
+Long jobs are checkpointed by chunk and verification batch. A `capped` run records elapsed time, ETA, contiguous processed cursor, cap reason, and supports in-place checkpoint resume (plus optional `t=<seconds>s` continuation when unextracted transcript remains).
 
 ## Output fields
 
 Every bibliography hit contains:
 
-- `title`: a formal multi-word event, publication, quote, regulation, statement, or subject.
-- `category`: `quote`, `publication`, `event`, `financial_crisis`, `regulation`, `executive_statement`, or `other`.
+- `title`: a formal multi-word event, publication, quote, policy, study, regulation, statement, or subject.
+- `category`: `quote`, `publication`, `event`, `financial_crisis`, `regulation`, `public_policy`, `economics_research`, `executive_statement`, or `other`.
 - `evidenceType`: `direct_quote`, `paraphrase`, or `reference`.
 - `timestamp`: zero-padded `HH:MM:SS` in the video.
 - `timestampSeconds`: the same video position as an integer.

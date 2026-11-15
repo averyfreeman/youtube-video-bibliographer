@@ -29,7 +29,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "The job cannot be retried.",
+          error instanceof Error ? error.message : "The job cannot be resumed.",
       },
       { status: 409 },
     );

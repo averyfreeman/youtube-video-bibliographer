@@ -1,6 +1,6 @@
 # Architecture
 
-The application is a local-first Next.js route plus a filesystem-backed worker. `app/api/historical-references/` owns HTTP boundaries, `lib/job-manager.ts` owns lifecycle and recovery, `lib/job-store.ts` owns durable state, `lib/job-pipeline.ts` owns bounded orchestration, and `components/historical-quote-extractor.tsx` owns polling and presentation.
+The application is a local-first Next.js route plus a filesystem-backed worker and CLI (`scripts/bibliographer-cli.ts`). `app/api/references/` owns HTTP boundaries, `lib/job-manager.ts` owns lifecycle and recovery, `lib/job-store.ts` owns durable state, `lib/job-pipeline.ts` owns bounded orchestration, `lib/policy-braintrust-export.ts` formats JSON/MDX output for `../policy-braintrust`, and `components/historical-quote-extractor.tsx` owns polling, saved-job loading, and non-destructive presentation.
 
 ## Bounded lifecycle
 
@@ -8,17 +8,17 @@ The application is a local-first Next.js route plus a filesystem-backed worker. 
 POST URL
   -> queued job.json
   -> retrieve captions and apply optional t=<seconds>s cursor
-  -> extract 12,000-character chunks with high-recall phrase filtering
-  -> globally deduplicate candidates
-  -> verify only a <=40-item shortlist, expanding to <=52 in the final five minutes
-  -> optionally enrich the saved presentation
+  -> extract 12,000-character chunks in parallel (candidate_concurrency = 3) + overview in parallel
+  -> globally deduplicate candidates & select timeline-balanced shortlist (<=50/65)
+  -> verify in parallel checkpointed batches (verification_batch_size = 8, verification_concurrency = 3)
+  -> optionally enrich the saved presentation in batches
   -> generate best-effort 320x180 storyboard tiles
-  -> completed or capped job.json
+  -> completed or resumable capped job.json
 ```
 
-Creation returns `202` with a job identifier and poll URL. A worker starts with the project-owned `bibliographer.config.toml`, reads `DEFAULT_PROMPT.md`, and invokes isolated Codex CLI subprocesses. Candidate extraction uses the project’s high-recall effort, while synthesis, verification, overview, and optional context enrichment use medium effort by default; the shared setting remains a fallback for stage-specific overrides. The CLI still ignores user configuration and repository rules; the application injects the project prompt explicitly.
+Creation returns `202` with a job identifier and poll URL. A worker starts with the project-owned `bibliographer.config.toml`, reads `DEFAULT_PROMPT.md`, and invokes isolated Codex CLI subprocesses. Candidate extraction uses the project’s high-recall effort, while verification, overview, and optional context enrichment use medium effort by default; the shared setting remains a fallback for stage-specific overrides. The CLI still ignores user configuration and repository rules; the application injects the project prompt explicitly.
 
-The default safety envelope is a usual 40 final hits, a hard 52-hit ceiling in the final five minutes, and 600 seconds. Extraction proceeds in chronological batches and checks the deadline between calls. A capped job is terminal, keeps partial hits, records `capReason`, `processedUntilSeconds`, timing, and `resumeUrl`, and can be continued by submitting that URL as a new job. The soft limit, hard ceiling, and tail allowance are persisted with the job. Failed jobs remain retryable from their latest checkpoint; capped jobs use the explicit continuation path.
+The default safety envelope is a soft 50-reference target, a 65-reference hard ceiling in the final five minutes, and 900 seconds (15 minutes), with CLI overrides up to `--no-limit`. Extraction proceeds across all chunks in parallel batches and checks the deadline between calls. A capped job preserves partial results, records `capReason`, contiguous `processedUntilSeconds`, timing, and optional `resumeUrl`, and can be resumed directly in-place from its latest chunk or verification-batch checkpoint (`POST /api/references/[jobId]/retry`) without wiping existing hits from the UI.
 
 ## Processing boundaries
 
@@ -30,7 +30,7 @@ Candidate extraction asks for high-value multi-word phrases only. `lib/phrase-cu
 
 ## Persistence and media
 
-Each job directory contains `job.json`, `transcript.json`, and optionally `thumbnails/<index>.jpg`. Atomic JSON writes make checkpoints recoverable. Job state also persists best-effort `videoMetadata` and a reader-facing `videoOverview`. New overviews use description-only people/theme/summary enrichment and cap the participant list at four. Snapshot-only `thumbnailUrl` values point to `/api/historical-references/[jobId]/thumbnails/[index]`; Markdown is served exactly by `/api/historical-references/[jobId]/markdown` and shown on `/app/jobs/[jobId]/markdown`, not embedded in the long results list.
+Each job directory contains `job.json`, `transcript.json`, and optionally `thumbnails/<index>.jpg`. Atomic JSON writes make checkpoints recoverable. Job state also persists best-effort `videoMetadata` and a reader-facing `videoOverview`. New overviews use description-only people/theme/summary enrichment and cap the participant list at four. Snapshot-only `thumbnailUrl` values point to `/api/references/[jobId]/thumbnails/[index]`; Markdown is served exactly by `/api/references/[jobId]/markdown` and shown on `/app/jobs/[jobId]/markdown`, not embedded in the long results list.
 
 Storyboard generation calls `yt-dlp` for a signed storyboard format and `ffmpeg` for tile crops. Both paths are configurable. Tool absence, missing storyboard formats, HTTP failures, and individual crop failures are warnings, while the bibliography remains usable.
 

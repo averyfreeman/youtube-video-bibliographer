@@ -2,7 +2,9 @@ import type {
   HistoricalReference,
   SourceQuality,
   VideoOverview,
+  VideoSection,
 } from "./historical-references.ts";
+import { normalizePhraseTitle } from "./phrase-curation.ts";
 
 export const exportFormats = {
   md: {
@@ -20,6 +22,29 @@ function sourceQualityLabel(quality: SourceQuality) {
 export function timestampUrl(videoUrl: string, seconds: number) {
   const url = new URL(videoUrl);
   url.searchParams.set("t", `${Math.max(0, Math.floor(seconds))}s`);
+  url.searchParams.delete("start");
+  url.searchParams.delete("end");
+  url.searchParams.delete("stop");
+  return url.toString();
+}
+
+export function timestampWindowUrl(
+  videoUrl: string,
+  startSeconds: number,
+  endSeconds: number | null = null,
+) {
+  const url = new URL(videoUrl);
+  url.searchParams.set("t", `${Math.max(0, Math.floor(startSeconds))}s`);
+  url.searchParams.delete("start");
+  url.searchParams.delete("stop");
+  if (endSeconds !== null) {
+    url.searchParams.set(
+      "end",
+      `${Math.max(Math.floor(startSeconds), Math.floor(endSeconds))}s`,
+    );
+  } else {
+    url.searchParams.delete("end");
+  }
   return url.toString();
 }
 
@@ -50,8 +75,8 @@ function renderVideoOverview(overview: VideoOverview | null) {
     `- Title: ${overviewValue(overview.title, "Not established")}`,
     `- Channel: ${overviewValue(overview.channel, "Not established")}`,
     `- ${dateLabel}`,
-    `- People in the conversation: ${people}`,
-    `- What the video is about: ${overviewValue(overview.theme, "Not established")}`,
+    `- Speakers: ${people}`,
+    `- Subject: ${overviewValue(overview.theme, "Not established")}`,
     "",
     overviewValue(
       overview.summary,
@@ -60,58 +85,152 @@ function renderVideoOverview(overview: VideoOverview | null) {
   ].join("\n");
 }
 
+function renderReferenceSection(
+  videoUrl: string,
+  hit: HistoricalReference,
+  index: number,
+  headingPrefix: "##" | "###",
+) {
+  const sourceLines = hit.sources
+    .map((source) => {
+      const weakSourceNote =
+        source.quality === "secondary" ||
+        source.quality === "analysis" ||
+        source.quality === "culture"
+          ? " — secondary/analysis/culture source; verify independently"
+          : "";
+      const note = source.note ? ` — ${source.note}` : "";
+      return `- [${source.title}](${source.url})${note} *(${sourceQualityLabel(source.quality)}${weakSourceNote})*`;
+    })
+    .join("\n");
+
+  const metaParts = [
+    `[${hit.timestamp}](${timestampUrl(videoUrl, hit.timestampSeconds)})`,
+    hit.category.replace(/_/g, " "),
+    ...(hit.historicalDate ? [`Reference date: ${hit.historicalDate}`] : []),
+    ...(hit.speaker ? [`Speaker: ${hit.speaker}`] : []),
+  ];
+
+  const auditLines = [
+    `- Evidence type: ${hit.evidenceType.replace(/_/g, " ")}`,
+    `- Confidence: ${hit.confidence}`,
+    `- Confidence reasons: ${hit.confidenceReasons.join("; ")}`,
+    `- Verification: ${hit.verificationStatus}`,
+    `- Verification note: ${hit.verificationNote}`,
+    ...(hit.speaker ? [`- Speaker: ${hit.speaker}`] : []),
+  ];
+
+  return [
+    `${headingPrefix} ${index + 1}. ${hit.timestamp} — ${hit.title}`,
+    "",
+    metaParts.join(" · "),
+    "",
+    `> ${hit.videoEvidence}`,
+    "",
+    ...(hit.discussionContextParagraphs.length > 0
+      ? [
+          "### Discussion topic",
+          "",
+          ...hit.discussionContextParagraphs,
+          "",
+        ]
+      : []),
+    "### Why this reference matters",
+    "",
+    ...hit.analysisParagraphs,
+    "",
+    "### Sources and further reading",
+    "",
+    sourceLines ||
+      "No trustworthy source was available; verify this reference independently.",
+    "",
+    "<details>",
+    "<summary>Verification & audit</summary>",
+    "",
+    ...auditLines,
+    "",
+    "</details>",
+  ].join("\n");
+}
+
 export function renderBibliographyMarkdown(
   videoUrl: string,
   overview: VideoOverview | null,
   hits: HistoricalReference[],
+  sections: VideoSection[] = [],
 ) {
-  const sections = hits.map((hit, index) => {
-    const sourceLines = hit.sources
-      .map((source) => {
-        const weakSourceNote =
-          source.quality === "secondary" ||
-          source.quality === "analysis" ||
-          source.quality === "culture"
-            ? " — secondary/analysis/culture source; verify independently"
-            : "";
-        const note = source.note ? ` (${source.note})` : "";
-        return `- [${source.title}](${source.url}) — ${sourceQualityLabel(source.quality)}${weakSourceNote}${note}`;
-      })
-      .join("\n");
+  let body: string;
 
-    return [
-      `## ${index + 1}. ${hit.timestamp} — ${hit.title}`,
-      "",
-      `- Category: ${hit.category.replace(/_/g, " ")}`,
-      `- Evidence type: ${hit.evidenceType.replace(/_/g, " ")}`,
-      `- Historical date: ${hit.historicalDate ?? "Not established"}`,
-      `- Confidence: ${hit.confidence}`,
-      `- Confidence reasons: ${hit.confidenceReasons.join("; ")}`,
-      `- Verification: ${hit.verificationStatus}`,
-      `- Verification note: ${hit.verificationNote}`,
-      `- Speaker: ${hit.speaker ?? "Speaker not established in the video description"}`,
-      `- Video timestamp: [${hit.timestamp}](${timestampUrl(videoUrl, hit.timestampSeconds)})`,
-      "",
-      `> ${hit.videoEvidence}`,
-      "",
-      ...(hit.discussionContextParagraphs.length > 0
-        ? [
-            "### What they were discussing",
-            "",
-            ...hit.discussionContextParagraphs,
-            "",
-          ]
-        : []),
-      "### Why this reference matters",
-      "",
-      ...hit.analysisParagraphs,
-      "",
-      "### Sources and further reading",
-      "",
-      sourceLines ||
-        "No trustworthy source was available; verify this reference independently.",
-    ].join("\n");
-  });
+  if (hits.length === 0) {
+    body = "No strong references were found.";
+  } else if (sections.length > 0) {
+    const hitIndexByTitle = new Map(
+      hits.map((hit, index) => [
+        normalizePhraseTitle(hit.title),
+        { hit, index },
+      ]),
+    );
+    const assigned = new Set<number>();
+    const renderedSections: string[] = [];
+
+    for (const section of sections) {
+      const sectionHits = section.hitTitles
+        .map((title) => hitIndexByTitle.get(normalizePhraseTitle(title)))
+        .filter(
+          (entry): entry is { hit: HistoricalReference; index: number } =>
+            entry !== undefined && !assigned.has(entry.index),
+        );
+
+      if (sectionHits.length === 0) {
+        continue;
+      }
+
+      for (const entry of sectionHits) {
+        assigned.add(entry.index);
+      }
+
+      renderedSections.push(
+        [
+          `## ${section.title}`,
+          "",
+          section.summary,
+          "",
+          sectionHits
+            .map((entry) =>
+              renderReferenceSection(videoUrl, entry.hit, entry.index, "###"),
+            )
+            .join("\n\n"),
+        ].join("\n"),
+      );
+    }
+
+    const leftovers = hits
+      .map((hit, index) => ({ hit, index }))
+      .filter((entry) => !assigned.has(entry.index));
+
+    if (leftovers.length > 0) {
+      renderedSections.push(
+        leftovers
+          .map((entry) =>
+            renderReferenceSection(videoUrl, entry.hit, entry.index, "###"),
+          )
+          .join("\n\n"),
+      );
+    }
+
+    body =
+      renderedSections.length > 0
+        ? renderedSections.join("\n\n")
+        : hits
+            .map((hit, index) =>
+              renderReferenceSection(videoUrl, hit, index, "##"),
+            )
+            .join("\n\n");
+  } else {
+    body = hits
+      .map((hit, index) => renderReferenceSection(videoUrl, hit, index, "##"))
+      .join("\n\n");
+  }
 
   return [
     "# YouTube Video Bibliography",
@@ -122,9 +241,7 @@ export function renderBibliographyMarkdown(
     "",
     "The references below follow the order in which they appear in the video.",
     "",
-    sections.length > 0
-      ? sections.join("\n\n")
-      : "No strong historical references were found.",
+    body,
     "",
   ].join("\n");
 }
@@ -134,9 +251,10 @@ export function renderExport(
   videoUrl: string,
   overview: VideoOverview | null,
   hits: HistoricalReference[],
+  sections: VideoSection[] = [],
 ) {
   if (format === "md") {
-    return renderBibliographyMarkdown(videoUrl, overview, hits);
+    return renderBibliographyMarkdown(videoUrl, overview, hits, sections);
   }
 
   const exhaustiveFormatCheck: never = format;

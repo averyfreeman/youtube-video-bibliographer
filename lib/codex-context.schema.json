@@ -6,7 +6,7 @@
   "properties": {
     "contexts": {
       "type": "array",
-      "maxItems": 40,
+      "maxItems": 200,
       "items": {
         "type": "object",
         "additionalProperties": false,

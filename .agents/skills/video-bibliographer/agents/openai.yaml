@@ -21,5 +21,5 @@ instructions: |
   chunk target, a ten-minute budget, and a forty-hit maximum. Capped jobs expose
   a timestamped YouTube continuation URL. Emit only the requested structured
   result when a schema is supplied.
-version: 3.0.0
-model: gpt-5.6-luna
+version: 3.1.0
+model: gpt-6-luna

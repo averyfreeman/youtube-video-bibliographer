@@ -8,22 +8,46 @@ import {
   MAX_RUNTIME_SECONDS_LIMIT,
 } from "./bibliographer-config.ts";
 import {
+  calculateJobTiming,
+  isRetryableJobStatus,
   persistedJobSchema,
-  type PersistedJob,
   type JobSnapshot,
+  type JobSummary,
+  type PersistedJob,
 } from "./job-types.ts";
-import { calculateJobTiming } from "./job-types.ts";
 import {
   DEFAULT_SOFT_MAX_HITS,
   DEFAULT_TAIL_GRACE_SECONDS,
 } from "./job-policy.ts";
-import type { YouTubeTranscript } from "./youtube-transcript.ts";
+import type {
+  ExtractionDepth,
+  ModelProvider,
+  ReferenceCategory,
+} from "./historical-references.ts";
+import {
+  filterMeaningfulPhrases,
+  normalizePhraseTitle,
+} from "./phrase-curation.ts";
+import {
+  parseTimestampRange,
+  type YouTubeTranscript,
+} from "./youtube-transcript.ts";
+import type { YouTubeChapter } from "./youtube-metadata-schema.ts";
 
 export type JobCreateOptions = {
   maxHits?: number;
   softMaxHits?: number;
   tailGraceSeconds?: number;
   maxRuntimeSeconds?: number;
+  allowUnlimited?: boolean;
+  includeThumbnails?: boolean;
+  provider?: ModelProvider;
+  temperature?: number | null;
+  extractionDepth?: ExtractionDepth;
+  focusPrompt?: string | null;
+  targetCategories?: ReferenceCategory[];
+  processingEndSeconds?: number | null;
+  chapterPlan?: YouTubeChapter[];
 };
 
 const JOB_ID_PATTERN = /^[0-9a-f-]{36}$/i;
@@ -88,10 +112,9 @@ export class JobStore {
     options: JobCreateOptions = {},
   ): Promise<PersistedJob> {
     const now = new Date().toISOString();
-    const maxHits = Math.min(
-      options.maxHits ?? DEFAULT_MAX_HITS,
-      MAX_HITS_LIMIT,
-    );
+    const maxHits = options.allowUnlimited
+      ? Math.max(1, options.maxHits ?? DEFAULT_MAX_HITS)
+      : Math.min(options.maxHits ?? DEFAULT_MAX_HITS, MAX_HITS_LIMIT);
     const softMaxHits = Math.min(
       options.softMaxHits ?? DEFAULT_SOFT_MAX_HITS,
       maxHits,
@@ -100,10 +123,13 @@ export class JobStore {
       1,
       options.tailGraceSeconds ?? DEFAULT_TAIL_GRACE_SECONDS,
     );
-    const maxRuntimeSeconds = Math.min(
-      options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
-      MAX_RUNTIME_SECONDS_LIMIT,
-    );
+    const maxRuntimeSeconds = options.allowUnlimited
+      ? Math.max(1, options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS)
+      : Math.min(
+          options.maxRuntimeSeconds ?? DEFAULT_MAX_RUNTIME_SECONDS,
+          MAX_RUNTIME_SECONDS_LIMIT,
+        );
+    const range = parseTimestampRange(videoUrl);
     const record = persistedJobSchema.parse({
       jobId,
       status: "queued",
@@ -121,6 +147,7 @@ export class JobStore {
       transcriptLanguage: null,
       transcriptTruncated: false,
       videoOverview: null,
+      sections: [],
       warnings: [],
       hits: [],
       markdown: null,
@@ -131,11 +158,22 @@ export class JobStore {
         budgetSeconds: maxRuntimeSeconds,
       },
       startedAt: null,
-      processingStartSeconds: 0,
-      processedUntilSeconds: 0,
+      processingStartSeconds: range.startSeconds,
+      processingEndSeconds:
+        options.processingEndSeconds ?? range.endSeconds ?? null,
+      processedUntilSeconds: range.startSeconds,
       capReason: null,
       resumeFromSeconds: null,
       resumeUrl: null,
+      extractionDepth: options.extractionDepth ?? "curated",
+      focusPrompt: options.focusPrompt?.trim() || null,
+      targetCategories: Array.from(new Set(options.targetCategories ?? [])),
+      chapterPlan: options.chapterPlan ?? [],
+      completedChapters: 0,
+      currentChapterIndex: null,
+      includeThumbnails: options.includeThumbnails ?? false,
+      provider: options.provider ?? "auto",
+      temperature: options.temperature ?? null,
       maxHits,
       softMaxHits,
       tailGraceSeconds,
@@ -222,6 +260,21 @@ export class JobStore {
   }
 
   snapshot(record: PersistedJob): JobSnapshot {
+    const verifiedTitles = new Set(
+      record.hits.map((hit) => normalizePhraseTitle(hit.title)),
+    );
+    const meaningfulCandidateTitles = new Set(
+      filterMeaningfulPhrases(
+        Object.values(record.candidatesByChunk).flat(),
+      ).map((candidate) => normalizePhraseTitle(candidate.title)),
+    );
+    let unverifiedCandidateCount = 0;
+    for (const title of meaningfulCandidateTitles) {
+      if (!verifiedTitles.has(title)) {
+        unverifiedCandidateCount += 1;
+      }
+    }
+
     return {
       jobId: record.jobId,
       status: record.status,
@@ -232,11 +285,12 @@ export class JobStore {
       transcriptLanguage: record.transcriptLanguage,
       transcriptTruncated: record.transcriptTruncated,
       videoOverview: record.videoOverview,
+      sections: record.sections,
       warnings: record.warnings,
       hits: record.hits.map((hit, index) => ({
         ...hit,
         thumbnailUrl: record.thumbnailPaths[String(index)]
-          ? `/api/historical-references/${record.jobId}/thumbnails/${index}`
+          ? `/api/references/${record.jobId}/thumbnails/${index}`
           : null,
       })),
       markdown: record.markdown,
@@ -244,13 +298,45 @@ export class JobStore {
       timing: calculateJobTiming(record),
       startedAt: record.startedAt,
       processingStartSeconds: record.processingStartSeconds,
+      processingEndSeconds: record.processingEndSeconds,
       processedUntilSeconds: record.processedUntilSeconds,
       capReason: record.capReason,
       resumeFromSeconds: record.resumeFromSeconds,
       resumeUrl: record.resumeUrl,
+      canResume: isRetryableJobStatus(record.status),
+      extractionDepth: record.extractionDepth,
+      focusPrompt: record.focusPrompt,
+      targetCategories: record.targetCategories,
+      durationSeconds: record.videoMetadata?.durationSeconds ?? null,
+      chapters: record.videoMetadata?.chapters ?? [],
+      chapterPlan: record.chapterPlan,
+      completedChapters: record.completedChapters,
+      currentChapterIndex: record.currentChapterIndex,
+      unverifiedCandidateCount,
+      includeThumbnails: record.includeThumbnails,
+      provider: record.provider,
+      temperature: record.temperature,
       maxHits: record.maxHits,
       softMaxHits: record.softMaxHits,
       tailGraceSeconds: record.tailGraceSeconds,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  summary(record: PersistedJob): JobSummary {
+    return {
+      jobId: record.jobId,
+      videoUrl: record.videoUrl,
+      title: record.videoOverview?.title ?? record.videoMetadata?.title ?? null,
+      status: record.status,
+      phase: record.phase,
+      hitCount: record.hits.length,
+      candidateCount: record.progress.candidateCount,
+      percent: record.progress.percent,
+      capReason: record.capReason,
+      canResume: isRetryableJobStatus(record.status),
+      resumeUrl: record.resumeUrl,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

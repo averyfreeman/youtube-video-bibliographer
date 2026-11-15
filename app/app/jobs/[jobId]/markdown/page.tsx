@@ -34,8 +34,11 @@ export default async function MarkdownPage({
               The exact reading list generated from this video.
             </p>
           </div>
-          <Link className="btn btn-sm btn-outline" href="/app">
-            New bibliography
+          <Link
+            className="btn btn-sm btn-outline"
+            href={`/app?jobId=${job.jobId}`}
+          >
+            Back to results
           </Link>
         </div>
 
@@ -49,11 +52,11 @@ export default async function MarkdownPage({
           <a
             className="btn btn-primary"
             download="youtube-bibliography.md"
-            href={`/api/historical-references/${job.jobId}/markdown`}
+            href={`/api/references/${job.jobId}/markdown`}
           >
             Download the reading list
           </a>
-          <Link className="btn btn-ghost" href="/app">
+          <Link className="btn btn-ghost" href={`/app?jobId=${job.jobId}`}>
             Back to the video form
           </Link>
         </div>

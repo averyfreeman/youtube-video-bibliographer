@@ -45,7 +45,7 @@ export type TranscriptChunks = {
 export const TRANSCRIPT_CONTEXT_RADIUS_SECONDS = 30;
 export const TRANSCRIPT_CONTEXT_MAX_CHARACTERS = 1_200;
 
-function parseTimeParameter(value: string) {
+export function parseTimeParameter(value: string) {
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) {
     return null;
@@ -53,6 +53,14 @@ function parseTimeParameter(value: string) {
 
   if (/^\d+$/.test(trimmed)) {
     return Number(trimmed);
+  }
+
+  if (/^\d+(?::\d{1,2}){1,2}$/.test(trimmed)) {
+    const segments = trimmed.split(":").map(Number);
+    if (segments.length === 2) {
+      return segments[0] * 60 + segments[1];
+    }
+    return segments[0] * 3_600 + segments[1] * 60 + segments[2];
   }
 
   const parts = [...trimmed.matchAll(/(\d+(?:\.\d+)?)(h|m|s)/g)];
@@ -66,21 +74,51 @@ function parseTimeParameter(value: string) {
   }, 0);
 }
 
-export function parseTimestampStart(videoUrl: string) {
+export function parseTimestampRange(videoUrl: string): {
+  startSeconds: number;
+  endSeconds: number | null;
+} {
   try {
     const url = new URL(videoUrl);
-    return parseTimeParameter(url.searchParams.get("t") ?? "") ?? 0;
+    const hashParam = url.hash.startsWith("#t=") ? url.hash.slice(3) : "";
+    const startRaw =
+      url.searchParams.get("t") ?? url.searchParams.get("start") ?? hashParam;
+    const endRaw =
+      url.searchParams.get("end") ?? url.searchParams.get("stop") ?? "";
+    const start = Math.max(0, Math.floor(parseTimeParameter(startRaw) ?? 0));
+    const parsedEnd = parseTimeParameter(endRaw);
+    const endSeconds =
+      parsedEnd !== null ? Math.max(start, Math.floor(parsedEnd)) : null;
+    return { startSeconds: start, endSeconds };
   } catch {
-    return 0;
+    return { startSeconds: 0, endSeconds: null };
   }
+}
+
+export function parseTimestampStart(videoUrl: string) {
+  return parseTimestampRange(videoUrl).startSeconds;
+}
+
+export function filterTranscriptByRange(
+  segments: NormalizedTranscriptSegment[],
+  startSeconds: number,
+  endSeconds: number | null = null,
+) {
+  const start = Math.max(0, Math.floor(startSeconds));
+  const end =
+    endSeconds !== null ? Math.max(start, Math.floor(endSeconds)) : null;
+  return segments.filter(
+    (segment) =>
+      segment.timestampSeconds >= start &&
+      (end === null || segment.timestampSeconds <= end),
+  );
 }
 
 export function filterTranscriptFromTimestamp(
   segments: NormalizedTranscriptSegment[],
   startSeconds: number,
 ) {
-  const start = Math.max(0, Math.floor(startSeconds));
-  return segments.filter((segment) => segment.timestampSeconds >= start);
+  return filterTranscriptByRange(segments, startSeconds, null);
 }
 
 export function transcriptContextForTimestamp(

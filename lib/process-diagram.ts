@@ -76,22 +76,22 @@ export function getProcessDiagramConfig(
 export const processDiagramSource = `flowchart LR
   url[YouTube video] --> captions[Read captions]
   captions --> cursor[Start at an optional timestamp]
-  cursor --> phrases[Find historical references]
-  phrases --> dedupe[Remove repeats]
-  dedupe --> verify[Check sources]
+  cursor --> phrases[Find references]
+  phrases --> dedupe[Remove repeats & balance timeline]
+  dedupe --> verify[Verify sources in parallel batches]
   verify --> enrich[Add optional video context]
   enrich --> results[Reading list and thumbnails]
   results --> markdown[Downloadable Markdown]
-  phrases -. limit .-> cap[Pause at 10 minutes or 40 references]
+  phrases -. limit .-> cap[Pause cleanly with saved checkpoint]
   verify -. limit .-> cap
-  cap -. continue from t=Ns .-> cursor`;
+  cap -. resume or continue .-> cursor`;
 
 export const processDiagramText = [
   "Start with a YouTube video.",
   "Read the captions from the beginning or an optional timestamp.",
-  "Find meaningful historical references and remove repeats.",
-  "Check sources for the references that made the cut.",
+  "Find meaningful references (history, public policy, economics research, quotes, and events) and remove repeats.",
+  "Check sources in parallel batches with per-batch checkpoints.",
   "Optionally add one short discussion-context paragraph; speaker labels come only from the description.",
   "Show a reading list with lazy storyboard thumbnails and Markdown export.",
-  "If the run reaches its limit, save a timestamped place to continue.",
+  "If a time or hit limit is reached, resume in-place from the saved checkpoint or continue without losing existing results.",
 ];

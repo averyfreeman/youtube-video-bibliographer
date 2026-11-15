@@ -5,13 +5,21 @@ import {
   DEFAULT_SOFT_MAX_HITS,
   DEFAULT_TAIL_GRACE_SECONDS,
 } from "./job-policy.ts";
+import type { ModelProvider } from "./historical-references.ts";
 
 export const DEFAULT_CHUNK_CHARACTERS = 12_000;
 export const DEFAULT_MAX_CANDIDATES_PER_CHUNK = 16;
-export const DEFAULT_MAX_HITS = 52;
-export const DEFAULT_MAX_RUNTIME_SECONDS = 10 * 60;
-export const MAX_HITS_LIMIT = 52;
-export const MAX_RUNTIME_SECONDS_LIMIT = 10 * 60;
+export const DEFAULT_MAX_HITS = 65;
+export const DEFAULT_MAX_RUNTIME_SECONDS = 15 * 60;
+export const DEFAULT_VERIFICATION_BATCH_SIZE = 8;
+export const MAX_HITS_LIMIT = 500;
+export const MAX_RUNTIME_SECONDS_LIMIT = 60 * 60;
+export const DEFAULT_CODEX_MODEL = "gpt-6-luna";
+export const DEFAULT_AGY_MODEL = "gemini-4-hydrogen";
+export const DEFAULT_GEMINI_MODEL = "gemini-4-hydrogen";
+export const DEFAULT_TEMPERATURE = 0.15;
+export const DEFAULT_EDITORIAL_TEMPERATURE = 1.0;
+export const DEFAULT_TOP_K = 40;
 
 export type CodexReasoningEffort = "medium" | "high" | "xhigh" | "max";
 
@@ -28,6 +36,7 @@ export type BibliographerConfig = {
     candidateConcurrency: number;
     synthesisConcurrency: number;
     verificationConcurrency: number;
+    verificationBatchSize: number;
     maxCandidatesPerChunk: number;
     softMaxHits: number;
     maxHits: number;
@@ -38,6 +47,15 @@ export type BibliographerConfig = {
     enabled: boolean;
     ytdlpPath: string;
     ffmpegPath: string;
+  };
+  llm: {
+    provider: ModelProvider;
+    codexModel: string;
+    agyModel: string;
+    geminiModel: string;
+    temperature: number;
+    editorialTemperature: number;
+    topK: number;
   };
 };
 
@@ -121,6 +139,33 @@ function asReasoningEffort(
     : fallback;
 }
 
+function asModelProvider(
+  values: FlatToml,
+  key: string,
+  fallback: ModelProvider,
+): ModelProvider {
+  const value = asString(values, key, fallback);
+  return value === "auto" || value === "codex" || value === "gemini"
+    ? value
+    : fallback;
+}
+
+function asNumberInRange(
+  values: FlatToml,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const value = values[key];
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : fallback;
+}
+
 export function buildBibliographerConfig(
   values: FlatToml,
   prompt: string,
@@ -174,17 +219,22 @@ export function buildBibliographerConfig(
       candidateConcurrency: asPositiveInteger(
         values,
         "processing.candidate_concurrency",
-        2,
+        3,
       ),
       synthesisConcurrency: asPositiveInteger(
         values,
         "processing.synthesis_concurrency",
-        1,
+        3,
       ),
       verificationConcurrency: asPositiveInteger(
         values,
         "processing.verification_concurrency",
-        1,
+        3,
+      ),
+      verificationBatchSize: asPositiveInteger(
+        values,
+        "processing.verification_batch_size",
+        DEFAULT_VERIFICATION_BATCH_SIZE,
       ),
       maxCandidatesPerChunk: asPositiveInteger(
         values,
@@ -211,6 +261,31 @@ export function buildBibliographerConfig(
       enabled: asBoolean(values, "thumbnails.enabled", true),
       ytdlpPath: asString(values, "thumbnails.ytdlp_path", "yt-dlp"),
       ffmpegPath: asString(values, "thumbnails.ffmpeg_path", "ffmpeg"),
+    },
+    llm: {
+      provider: asModelProvider(values, "llm.provider", "auto"),
+      codexModel: asString(values, "llm.codex_model", DEFAULT_CODEX_MODEL),
+      agyModel:
+        process.env.AGY_MODEL?.trim() ||
+        asString(values, "llm.agy_model", DEFAULT_AGY_MODEL),
+      geminiModel:
+        process.env.GEMINI_MODEL?.trim() ||
+        asString(values, "llm.gemini_model", DEFAULT_GEMINI_MODEL),
+      temperature: asNumberInRange(
+        values,
+        "llm.temperature",
+        DEFAULT_TEMPERATURE,
+        0,
+        2,
+      ),
+      editorialTemperature: asNumberInRange(
+        values,
+        "llm.editorial_temperature",
+        DEFAULT_EDITORIAL_TEMPERATURE,
+        0,
+        2,
+      ),
+      topK: asPositiveInteger(values, "llm.top_k", DEFAULT_TOP_K),
     },
   };
 }
