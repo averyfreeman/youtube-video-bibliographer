@@ -128,12 +128,7 @@ function renderReferenceSection(
     `> ${hit.videoEvidence}`,
     "",
     ...(hit.discussionContextParagraphs.length > 0
-      ? [
-          "### Discussion topic",
-          "",
-          ...hit.discussionContextParagraphs,
-          "",
-        ]
+      ? ["### Discussion topic", "", ...hit.discussionContextParagraphs, ""]
       : []),
     "### Why this reference matters",
     "",

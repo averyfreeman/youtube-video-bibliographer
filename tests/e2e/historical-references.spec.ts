@@ -215,7 +215,9 @@ test("builds the bibliography and preserves video order", async ({ page }) => {
   await expect(cards.nth(1)).toContainText("Speaker: The guest");
   await expect(cards.nth(1)).toContainText("Discussion topic");
   await cards.nth(1).locator("details").locator("summary").click();
-  await expect(cards.nth(1).locator("details summary")).toHaveText("Additional information");
+  await expect(cards.nth(1).locator("details summary")).toHaveText(
+    "Additional information",
+  );
   await expect(cards.nth(1).getByText("Match confidence")).toBeVisible();
   await expect(cards.nth(1).getByText("Reference date")).toBeVisible();
   await expect(cards.nth(1).getByText("Source links")).toBeVisible();

@@ -934,10 +934,13 @@ export function HistoricalQuoteExtractor() {
   }
 
   function renderHitCard(hit: PresentationHistoricalReference, index: number) {
-    const primarySource = selectPrimarySource(hit.sources);
+    const uniqueSources = Array.from(
+      new Map(hit.sources.map((source) => [source.url, source])).values(),
+    );
+    const primarySource = selectPrimarySource(uniqueSources);
     const extraSources = primarySource
-      ? hit.sources.filter((source) => source.url !== primarySource.url)
-      : hit.sources;
+      ? uniqueSources.filter((source) => source.url !== primarySource.url)
+      : uniqueSources;
     const sourceVideoUrl = job?.videoUrl ?? videoUrl;
     const auditKey = `${index}:${hit.timestampSeconds}:${hit.title}`;
     const isAuditOpen =
@@ -1150,9 +1153,9 @@ export function HistoricalQuoteExtractor() {
               </div>
               <div>
                 <h5 className="font-semibold">Source links</h5>
-                {hit.sources.length > 0 ? (
+                {uniqueSources.length > 0 ? (
                   <ul className="mt-2 space-y-2">
-                    {hit.sources.map((source) => (
+                    {uniqueSources.map((source) => (
                       <li key={source.url}>
                         <a
                           className="link link-primary"
